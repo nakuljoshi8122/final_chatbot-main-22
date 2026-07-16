@@ -1,0 +1,60 @@
+{
+  "HC-NEW-2TBIM": {
+    "sku": "HC-NEW-2TBIM",
+    "name": "Earrings",
+    "category": "Handicrafts",
+    "price": "3",
+    "description": "silver painted earrings",
+    "category_notes": "",
+    "quantity": 5,
+    "status": "active",
+    "img": "http://192.168.1.9:8000/product-images/HC-NEW-2TBIM.jpg",
+    "url": "http://192.168.1.9:8000/product-images/HC-NEW-2TBIM.jpg",
+    "source": "seller",
+    "tags": [
+      "bohemian",
+      "earrings",
+      "ethnic",
+      "fashion",
+      "handicraft",
+      "jewellery",
+      "painted",
+      "silver",
+      "women"
+    ],
+    "updated_at": "2026-07-15T13:24:10.653367+00:00",
+    "created_at": "2026-07-15T12:48:36.237Z",
+    "domain": "jewellery",
+    "audience": "women",
+    "product_type": "earrings"
+  },
+  "HC-NEW-3UIC0": {
+    "sku": "HC-NEW-3UIC0",
+    "name": "Tee",
+    "category": "Apparel",
+    "price": "4",
+    "description": "",
+    "category_notes": "",
+    "quantity": 10,
+    "status": "active",
+    "img": "http://192.168.1.9:8000/product-images/HC-NEW-3UIC0.jpg",
+    "url": "http://192.168.1.9:8000/product-images/HC-NEW-3UIC0.jpg",
+    "source": "seller",
+    "tags": [
+      "apparel",
+      "beige",
+      "casual",
+      "comfortable",
+      "cotton",
+      "everyday",
+      "plain",
+      "t-shirt",
+      "unisex"
+    ],
+    "updated_at": "2026-07-15T13:24:12.929684+00:00",
+    "created_at": "2026-07-15T13:17:31.344Z",
+    "domain": "apparel",
+    "audience": "unisex",
+    "product_type": "t-shirt"
+  }
+}

@@ -6,6 +6,9 @@ python-multipart>=0.0.32
 
 # Database
 pymongo>=4.17.0
+asyncpg>=0.30.0
+sqlalchemy>=2.0.0
+psycopg[binary]>=3.2.0
 
 # Google ADK + Gemini
 google-adk>=2.2.0
@@ -18,3 +21,4 @@ litellm>=1.75.5
 # Demo product image download (optional — run download_product_images.py)
 icrawler>=0.6.10
 certifi>=2024.0.0
+orjson>=3.10.0

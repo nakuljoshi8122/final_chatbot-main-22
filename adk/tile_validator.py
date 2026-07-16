@@ -698,10 +698,8 @@ def sanitize_adidas_response(
     if filter_note or active_filters.is_active():
         try:
             from .intent_router import is_filter_only_follow_up
-            from .product_matcher import is_comparison_query
         except ImportError:
             from intent_router import is_filter_only_follow_up
-            from product_matcher import is_comparison_query
 
         if is_comparison_query(user_query) and not is_buying_signal(user_query):
             return rebuild_response_with_tiles(

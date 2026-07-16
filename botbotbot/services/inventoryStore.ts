@@ -1,0 +1,309 @@
+import * as FileSystem from 'expo-file-system/legacy';
+import boutiqueSeed from '@/constants/boutiqueSeed.json';
+import {
+  InventoryStatus,
+  SellerCategory,
+  SELLER_CATEGORIES,
+} from '@/constants/SellerTheme';
+import {
+  removeSellerProductFromApi,
+  syncSellerProductToApi,
+} from '@/services/sellerSync';
+
+const FILE_NAME = 'seller_inventory_v1.json';
+const IMAGES_DIR = 'seller-images';
+
+const API_BASE = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.9:8000').replace(
+  /\/$/,
+  '',
+);
+
+export type InventoryItem = {
+  id: string;
+  sku: string;
+  name: string;
+  category: SellerCategory;
+  price: string;
+  description: string;
+  categoryNotes: string;
+  quantity: number;
+  status: InventoryStatus;
+  imageUri?: string;
+  createdAt: string;
+  updatedAt: string;
+  /** seed = from boutiqueSeed; seller = listed via add-product UI */
+  source?: 'seed' | 'seller';
+};
+
+export type InventoryFormInput = {
+  name: string;
+  category: SellerCategory;
+  price: string;
+  sku?: string;
+  description: string;
+  categoryNotes: string;
+  quantity: number;
+  status: 'active' | 'draft';
+  imageUri?: string;
+};
+
+type SeedRow = {
+  sku: string;
+  name: string;
+  price: string;
+  category: string;
+  description: string;
+  categoryNotes: string;
+};
+
+function isSellerCategory(value: string): value is SellerCategory {
+  return (SELLER_CATEGORIES as readonly string[]).includes(value);
+}
+
+function inventoryPath(): string {
+  return `${FileSystem.documentDirectory}${FILE_NAME}`;
+}
+
+function imagesDir(): string {
+  return `${FileSystem.documentDirectory}${IMAGES_DIR}/`;
+}
+
+export function productImageUrl(sku: string): string {
+  return `${API_BASE}/product-images/${sku}.jpg`;
+}
+
+function seededQuantity(sku: string): number {
+  let hash = 0;
+  for (let i = 0; i < sku.length; i += 1) {
+    hash = (hash * 31 + sku.charCodeAt(i)) >>> 0;
+  }
+  return 8 + (hash % 40);
+}
+
+function buildSeedItems(): InventoryItem[] {
+  const now = new Date().toISOString();
+  const items: InventoryItem[] = [];
+  (boutiqueSeed as SeedRow[]).forEach((row, index) => {
+    if (!isSellerCategory(row.category)) return;
+    const status: InventoryStatus =
+      index % 11 === 0 ? 'draft' : index % 17 === 0 ? 'archive' : 'active';
+    items.push({
+      id: row.sku,
+      sku: row.sku,
+      name: row.name,
+      category: row.category,
+      price: row.price || '',
+      description: row.description || '',
+      categoryNotes: row.categoryNotes || '',
+      quantity: seededQuantity(row.sku),
+      status,
+      imageUri: productImageUrl(row.sku),
+      createdAt: now,
+      updatedAt: now,
+      source: 'seed',
+    });
+  });
+  return items;
+}
+
+/** Session + disk cache (no AsyncStorage — broken on Expo Go with newArch). */
+let memoryCache: InventoryItem[] | null = null;
+
+async function ensureImagesDir(): Promise<void> {
+  const dir = imagesDir();
+  const info = await FileSystem.getInfoAsync(dir);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+  }
+}
+
+/** Copy a picked photo into app sandboxed storage and return a stable file:// URI. */
+export async function persistPickedImage(sourceUri: string, skuHint?: string): Promise<string> {
+  await ensureImagesDir();
+  const extMatch = sourceUri.match(/\.(jpe?g|png|webp|heic|gif)(\?|$)/i);
+  const ext = (extMatch?.[1] || 'jpg').toLowerCase().replace('jpeg', 'jpg');
+  const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const name = `${(skuHint || 'photo').replace(/[^A-Za-z0-9_-]/g, '_')}_${stamp}.${ext}`;
+  const dest = `${imagesDir()}${name}`;
+  await FileSystem.copyAsync({ from: sourceUri, to: dest });
+  return dest;
+}
+
+async function readAll(): Promise<InventoryItem[]> {
+  if (memoryCache) return memoryCache;
+
+  try {
+    const path = inventoryPath();
+    const info = await FileSystem.getInfoAsync(path);
+    if (info.exists) {
+      const raw = await FileSystem.readAsStringAsync(path);
+      const parsed = JSON.parse(raw) as InventoryItem[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        memoryCache = parsed;
+        return parsed;
+      }
+    }
+  } catch {
+    // fall through to seed
+  }
+
+  const seeded = buildSeedItems();
+  memoryCache = seeded;
+  await writeAll(seeded);
+  return seeded;
+}
+
+async function writeAll(items: InventoryItem[]): Promise<void> {
+  memoryCache = items;
+  try {
+    await FileSystem.writeAsStringAsync(inventoryPath(), JSON.stringify(items));
+  } catch {
+    // Keep in-memory copy for this session
+  }
+}
+
+export async function loadInventory(): Promise<InventoryItem[]> {
+  const items = await readAll();
+  return [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function getInventoryItem(id: string): Promise<InventoryItem | null> {
+  const items = await readAll();
+  return items.find((item) => item.id === id) ?? null;
+}
+
+function nextSku(category: SellerCategory, items: InventoryItem[]): string {
+  const prefix =
+    category === 'Handicrafts' ? 'HC' : category === 'Apparel' ? 'AP' : 'SK';
+  const stamp = Date.now().toString(36).toUpperCase().slice(-5);
+  const candidate = `${prefix}-NEW-${stamp}`;
+  if (!items.some((item) => item.sku === candidate)) return candidate;
+  return `${prefix}-NEW-${stamp}${items.length}`;
+}
+
+export async function createInventoryItem(
+  input: InventoryFormInput,
+): Promise<InventoryItem> {
+  const items = await readAll();
+  const now = new Date().toISOString();
+  const sku = (input.sku || '').trim() || nextSku(input.category, items);
+  const id = sku;
+  if (items.some((item) => item.id === id || item.sku === sku)) {
+    throw new Error(
+      `SKU "${sku}" already exists. Clear SKU to auto-generate, or pick a new one.`,
+    );
+  }
+  const item: InventoryItem = {
+    id,
+    sku,
+    name: input.name.trim(),
+    category: input.category,
+    price: input.price.trim(),
+    description: input.description.trim(),
+    categoryNotes: input.categoryNotes.trim(),
+    quantity: Math.max(0, Math.floor(input.quantity)),
+    status: input.status,
+    imageUri: input.imageUri || productImageUrl(sku),
+    createdAt: now,
+    updatedAt: now,
+    source: 'seller',
+  };
+  items.unshift(item);
+  await writeAll(items);
+  void syncSellerProductToApi(item, { forceRetag: true });
+  return item;
+}
+
+export async function updateInventoryItem(
+  id: string,
+  input: InventoryFormInput,
+): Promise<InventoryItem> {
+  const items = await readAll();
+  const index = items.findIndex((item) => item.id === id);
+  if (index < 0) throw new Error('Product not found.');
+  const existing = items[index];
+  const sku = (input.sku || existing.sku).trim() || existing.sku;
+  if (items.some((item) => item.id !== id && item.sku === sku)) {
+    throw new Error(`SKU "${sku}" already exists. Choose a different SKU.`);
+  }
+  const updated: InventoryItem = {
+    ...existing,
+    sku,
+    name: input.name.trim(),
+    category: input.category,
+    price: input.price.trim(),
+    description: input.description.trim(),
+    categoryNotes: input.categoryNotes.trim(),
+    quantity: Math.max(0, Math.floor(input.quantity)),
+    status: input.status,
+    imageUri: input.imageUri || existing.imageUri || productImageUrl(sku),
+    updatedAt: new Date().toISOString(),
+    source: existing.source || 'seller',
+  };
+  items[index] = updated;
+  await writeAll(items);
+  void syncSellerProductToApi(updated);
+  return updated;
+}
+
+export async function setItemStatus(
+  id: string,
+  status: InventoryStatus,
+): Promise<InventoryItem | null> {
+  const items = await readAll();
+  const index = items.findIndex((item) => item.id === id);
+  if (index < 0) return null;
+  items[index] = {
+    ...items[index],
+    status,
+    updatedAt: new Date().toISOString(),
+  };
+  await writeAll(items);
+  const updated = items[index];
+  if (status === 'trash') {
+    void removeSellerProductFromApi(updated.sku);
+  } else {
+    void syncSellerProductToApi(updated);
+  }
+  return updated;
+}
+
+export async function setItemQuantity(
+  id: string,
+  quantity: number,
+): Promise<InventoryItem | null> {
+  const items = await readAll();
+  const index = items.findIndex((item) => item.id === id);
+  if (index < 0) return null;
+  items[index] = {
+    ...items[index],
+    quantity: Math.max(0, Math.floor(quantity)),
+    updatedAt: new Date().toISOString(),
+  };
+  await writeAll(items);
+  const updated = items[index];
+  void syncSellerProductToApi(updated);
+  return updated;
+}
+
+const SEED_SKUS = new Set((boutiqueSeed as SeedRow[]).map((r) => r.sku));
+
+export function getSeedSkuSet(): Set<string> {
+  return SEED_SKUS;
+}
+
+/** One-shot push of local inventory so chat can find it (AI tags on server). */
+export async function pushSellerListingsToChat(): Promise<number> {
+  const { syncSellerItemsToApi, requestSellerRetag } = await import('@/services/sellerSync');
+  const items = await readAll();
+  const count = await syncSellerItemsToApi(items, SEED_SKUS);
+  // Backfill AI tags for any products that still lack tags
+  void requestSellerRetag();
+  return count;
+}
+
+export async function resetInventoryToSeed(): Promise<InventoryItem[]> {
+  const seeded = buildSeedItems();
+  await writeAll(seeded);
+  return seeded;
+}

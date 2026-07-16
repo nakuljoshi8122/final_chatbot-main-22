@@ -1,4 +1,6 @@
-from fastapi import FastAPI, File, UploadFile, Form
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, File, UploadFile, Form, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -9,10 +11,10 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
 
 # Switch agents via adk/.env — no code edits needed:
-#   AGENT_MODE=makeup   → bridal / makeup assistant (default)
-#   AGENT_MODE=adidas   → Adidas marketplace
-#   AGENT_USE_TOOLS=true → tool-calling agent (search + similar items)
-AGENT_MODE = os.getenv("AGENT_MODE", "makeup").lower()
+#   AGENT_MODE=crm     → enterprise CRM / BD assistant (default; uses static_agent.py)
+#   AGENT_MODE=makeup  → alias for crm (legacy)
+#   AGENT_MODE=adidas  → Adidas marketplace
+AGENT_MODE = os.getenv("AGENT_MODE", "crm").lower()
 AGENT_USE_TOOLS = os.getenv("AGENT_USE_TOOLS", "false").lower() in ("1", "true", "yes")
 
 if AGENT_MODE == "adidas":
@@ -33,8 +35,8 @@ else:
         from .static_agent import runner, session_service
     except ImportError:
         from static_agent import runner, session_service
-    APP_NAME = "makeup_artist_app"
-    SERVICE_LABEL = "makeup_artist_chatbot"
+    APP_NAME = "enterprise_crm_app"
+    SERVICE_LABEL = "enterprise_crm_assistant"
 
 try:
     from .whisper_utils import speech_to_text_whisper, text_to_speech_whisper, is_openai_configured
@@ -105,7 +107,7 @@ except ImportError:
     from session_commerce import session_active_product
     from session_store import SessionHistory, hydrate_session_state, append_message, load_messages
 
-# MongoDB-backed conversation memory (survives server restarts)
+# Postgres-backed conversation memory (survives server restarts)
 conversation_history = SessionHistory()
 
 RETURNING_RE = re.compile(
@@ -186,6 +188,22 @@ def _inject_active_product_context(session_id: str, query: str) -> str:
     return _inject_adidas_query_context(session_id, query, conversation_history)
 
 
+def _inject_crm_session_id(session_id: str, text: str) -> str:
+    """Append the live session_id so the LLM can pass it into contact tools."""
+    if not session_id:
+        return text
+    note = (
+        f"\n\nSYSTEM NOTE: The current user's session_id is `{session_id}`. "
+        "Pass this exact value as the session_id argument to get_contact, "
+        "update_contact, create_followup, and escalate_to_human. "
+        "Never invent a session_id. Use search_kb for all product questions. "
+        "When recommending products, put ONLY a short sentence plus the exact "
+        "<TILES>[...]</TILES> block from search_kb. Never use markdown images "
+        "(![...](...)) or markdown links ([View Here](...))."
+    )
+    return f"{text.rstrip()}{note}"
+
+
 def get_conversation_context(session_id: str, max_messages: int = 20) -> str:
     """Legacy text context — prefer build_llm_history_block for the LLM path."""
     try:
@@ -196,7 +214,7 @@ def get_conversation_context(session_id: str, max_messages: int = 20) -> str:
 
 
 def add_to_conversation(session_id: str, role: str, content: str):
-    """Append a turn to MongoDB-backed session memory."""
+    """Append a turn to Postgres-backed session memory."""
     if not session_id or not content:
         return
     msgs = append_message(session_id, role, content)
@@ -207,11 +225,114 @@ def add_to_conversation(session_id: str, role: str, content: str):
 logging.getLogger("google.adk").setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+
+async def _crm_log_inbound(session_id: str, text: str) -> None:
+    """Upsert Contact + log inbound Interaction (non-fatal on failure)."""
+    try:
+        try:
+            from .crm_models import get_or_create_contact, log_interaction
+        except ImportError:
+            from crm_models import get_or_create_contact, log_interaction
+        await get_or_create_contact(session_id)
+        await log_interaction(session_id, "inbound", text)
+    except Exception as e:
+        logger.warning(f"CRM inbound log failed for session {session_id}: {e}")
+
+
+async def _crm_log_outbound(session_id: str, text: str) -> None:
+    """Log outbound Interaction (non-fatal on failure)."""
+    try:
+        try:
+            from .crm_models import log_interaction
+        except ImportError:
+            from crm_models import log_interaction
+        await log_interaction(session_id, "outbound", text)
+    except Exception as e:
+        logger.warning(f"CRM outbound log failed for session {session_id}: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        try:
+            from .crm_models import init_crm_schema
+        except ImportError:
+            from crm_models import init_crm_schema
+        await init_crm_schema()
+        logger.info("CRM schema ready (contacts, interactions, deals, notes)")
+    except Exception as e:
+        logger.error(f"CRM schema init failed: {e}")
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 _PRODUCT_IMAGES_DIR = Path(__file__).resolve().parent / "static" / "products"
 _PRODUCT_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/product-images", StaticFiles(directory=_PRODUCT_IMAGES_DIR), name="product-images")
+
+
+class SellerProductIn(BaseModel):
+    sku: str
+    name: str
+    category: str = "Handicrafts"
+    price: str = ""
+    description: str = ""
+    category_notes: str = ""
+    quantity: int = 0
+    status: str = "active"
+    image_base64: str | None = None
+    image_url: str | None = None
+    url: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    force_retag: bool = False
+    tags: list[str] | None = None
+
+
+@app.get("/seller/products")
+async def get_seller_products(active_only: bool = False):
+    try:
+        from .seller_catalog import list_seller_products
+    except ImportError:
+        from seller_catalog import list_seller_products
+    return {"products": list_seller_products(active_only=active_only)}
+
+
+@app.post("/seller/products")
+async def post_seller_product(body: SellerProductIn):
+    """Upsert a seller-listed item so chat search_kb can find it (auto AI-tags photo)."""
+    try:
+        from .seller_catalog import upsert_seller_product
+    except ImportError:
+        from seller_catalog import upsert_seller_product
+    try:
+        payload = body.model_dump()
+        force = bool(payload.pop("force_retag", False))
+        row = upsert_seller_product(payload, tag=True, force_retag=force)
+        return {"ok": True, "product": row}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/seller/products/retag")
+async def retag_seller_products(force: bool = True):
+    """Re-run AI image tagging for all seller products."""
+    try:
+        from .seller_catalog import retag_all_seller_products
+    except ImportError:
+        from seller_catalog import retag_all_seller_products
+    return retag_all_seller_products(force=force)
+
+
+@app.delete("/seller/products/{sku}")
+async def remove_seller_product(sku: str):
+    try:
+        from .seller_catalog import delete_seller_product
+    except ImportError:
+        from seller_catalog import delete_seller_product
+    return {"ok": delete_seller_product(sku), "sku": sku}
+
 
 @app.get("/products/{product_id}")
 async def get_product(product_id: str):
@@ -324,21 +445,27 @@ async def get_session_history(session_id: str):
 
 
 @app.post("/ask")
-async def ask(query: UserQuery):
+async def ask(query: UserQuery, background_tasks: BackgroundTasks):
     try:
         logger.info(f"🤖 [ASK] Received query: '{query.query}' with session_id: {query.session_id}")
         
         # Use provided session_id or create a new one
         import uuid
         session_id = query.session_id or str(uuid.uuid4())
-        logger.info(f"🆔 [ASK] Using session_id: {session_id}")
+        user_id = session_id  # device/session identity for ADK (POC)
+        logger.info(f"🆔 [ASK] Using session_id/user_id: {session_id}")
         hydrate_session_state(session_id)
+
+        # CRM writes run after the response so they never share ADK's OTEL context
+        background_tasks.add_task(_crm_log_inbound, session_id, query.query)
 
         if AGENT_MODE == "adidas":
             if RETURNING_RE.search(query.query or ""):
                 reset_adidas_session(session_id, conversation_history)
+                answer = "Welcome back — what you looking for?"
+                background_tasks.add_task(_crm_log_outbound, session_id, answer)
                 return {
-                    "answer": "Welcome back — what you looking for?",
+                    "answer": answer,
                     "session_id": session_id,
                     "tile_meta": {"has_more": False},
                 }
@@ -358,6 +485,7 @@ async def ask(query: UserQuery):
                         "show_checkout": True,
                         "checkout_url": commerce.checkout_url,
                     }
+                background_tasks.add_task(_crm_log_outbound, session_id, commerce.response_text)
                 return result
 
             combo_resp = try_show_and_describe_response(
@@ -367,6 +495,7 @@ async def ask(query: UserQuery):
                 add_to_conversation(session_id, "user", query.query)
                 add_to_conversation(session_id, "assistant", combo_resp)
                 update_session_from_response(session_id, combo_resp)
+                background_tasks.add_task(_crm_log_outbound, session_id, combo_resp)
                 return {
                     "answer": combo_resp,
                     "session_id": session_id,
@@ -380,6 +509,7 @@ async def ask(query: UserQuery):
                 add_to_conversation(session_id, "user", query.query)
                 add_to_conversation(session_id, "assistant", compare_resp)
                 update_session_from_response(session_id, compare_resp)
+                background_tasks.add_task(_crm_log_outbound, session_id, compare_resp)
                 return {
                     "answer": compare_resp,
                     "session_id": session_id,
@@ -394,6 +524,7 @@ async def ask(query: UserQuery):
                 add_to_conversation(session_id, "user", query.query)
                 add_to_conversation(session_id, "assistant", fast_text)
                 update_session_from_response(session_id, fast_text)
+                background_tasks.add_task(_crm_log_outbound, session_id, fast_text)
                 return {
                     "answer": fast_text,
                     "session_id": session_id,
@@ -407,6 +538,7 @@ async def ask(query: UserQuery):
                 add_to_conversation(session_id, "user", query.query)
                 add_to_conversation(session_id, "assistant", ref_resp)
                 update_session_from_response(session_id, ref_resp)
+                background_tasks.add_task(_crm_log_outbound, session_id, ref_resp)
                 return {
                     "answer": ref_resp,
                     "session_id": session_id,
@@ -420,6 +552,7 @@ async def ask(query: UserQuery):
                 add_to_conversation(session_id, "user", query.query)
                 add_to_conversation(session_id, "assistant", best_resp)
                 update_session_from_response(session_id, best_resp)
+                background_tasks.add_task(_crm_log_outbound, session_id, best_resp)
                 return {
                     "answer": best_resp,
                     "session_id": session_id,
@@ -433,6 +566,7 @@ async def ask(query: UserQuery):
                 add_to_conversation(session_id, "user", query.query)
                 add_to_conversation(session_id, "assistant", prior_resp)
                 update_session_from_response(session_id, prior_resp)
+                background_tasks.add_task(_crm_log_outbound, session_id, prior_resp)
                 return {
                     "answer": prior_resp,
                     "session_id": session_id,
@@ -450,6 +584,8 @@ async def ask(query: UserQuery):
             contextual_query = _inject_active_product_context(session_id, history_payload)
         else:
             contextual_query = _inject_active_product_context(session_id, query.query)
+        if AGENT_MODE != "adidas":
+            contextual_query = _inject_crm_session_id(session_id, contextual_query)
 
         logger.info(f"💬 [ASK] History turns loaded for session: {session_id}")
         logger.info(f"🤖 [ASK] Sending contextual query to agent: {contextual_query[:100]}...")
@@ -458,18 +594,18 @@ async def ask(query: UserQuery):
         
         # Create session if it doesn't exist, ignore if it already exists
         try:
-            await session_service.create_session(user_id="user123", session_id=session_id, app_name=APP_NAME)
+            await session_service.create_session(user_id=user_id, session_id=session_id, app_name=APP_NAME)
         except Exception:
             # Session might already exist, that's okay
             pass
         
         response_text = ""
         logger.info("🔄 [ASK] Starting agent processing...")
-        async for event in runner.run_async(user_id="user123", session_id=session_id, new_message=user_message):
+        async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=user_message):
             if event.is_final_response() and event.content and event.content.parts:
                 response_text = event.content.parts[0].text
                 logger.info(f"✅ [ASK] Agent response: '{response_text}'")
-                break
+                # Do not break — early cancel of ADK's async generator leaks OTEL context
 
         if AGENT_MODE == "adidas":
             response_text, tile_meta = sanitize_adidas_response(
@@ -484,12 +620,19 @@ async def ask(query: UserQuery):
             )
             update_session_from_response(session_id, response_text)
         else:
+            try:
+                from .boutique_response import sanitize_boutique_response
+            except ImportError:
+                from boutique_response import sanitize_boutique_response
+            response_text = sanitize_boutique_response(response_text, query.query)
             tile_meta = {}
         
         # Store conversation in our simple history
         add_to_conversation(session_id, "user", query.query)
         add_to_conversation(session_id, "assistant", response_text)
         logger.info(f"💾 [ASK] Stored conversation for session: {session_id}")
+
+        background_tasks.add_task(_crm_log_outbound, session_id, response_text)
         
         logger.info(f"🎯 [ASK] Returning response: '{response_text[:100]}...'")
         result = {"answer": response_text, "session_id": session_id}
@@ -505,24 +648,31 @@ async def ask(query: UserQuery):
         # Handle Google API errors gracefully
         if "429" in error_text or "RESOURCE_EXHAUSTED" in error_text or "rate_limit" in error_text.lower():
             logger.error("❌ [ASK] API quota/rate limit exceeded")
+            answer = "I'm temporarily unavailable due to API rate limits. Please try again in a minute."
+            background_tasks.add_task(_crm_log_outbound, session_id, answer)
             return {
-                "answer": "I'm temporarily unavailable due to API rate limits. Please try again in a minute.",
+                "answer": answer,
                 "session_id": session_id,
             }
         if "503" in error_text or "UNAVAILABLE" in error_text:
             logger.error("❌ [ASK] API unavailable, returning fallback response")
+            answer = "I'm experiencing high demand right now. Please try again in a moment."
+            background_tasks.add_task(_crm_log_outbound, session_id, answer)
             return {
-                "answer": "I'm experiencing high demand right now. Please try again in a moment.",
+                "answer": answer,
                 "session_id": session_id,
             }
         logger.error("❌ [ASK] General error, returning fallback response")
+        answer = "I'm having trouble responding right now. Please try again or check the Services tab for my information."
+        background_tasks.add_task(_crm_log_outbound, session_id, answer)
         return {
-            "answer": "I'm having trouble responding right now. Please try again or check the Services tab for my information.",
+            "answer": answer,
             "session_id": session_id,
         }
 
 @app.post("/ask_voice")
 async def ask_voice(
+    background_tasks: BackgroundTasks,
     audio_file: UploadFile = File(...),
     session_id: Optional[str] = Form(None),
     return_audio: bool = Form(False)
@@ -560,22 +710,28 @@ async def ask_voice(
             # Use provided session_id or create a new one
             import uuid
             session_id = session_id or str(uuid.uuid4())
-            logger.info(f"🆔 [VOICE] Using session_id: {session_id}")
+            user_id = session_id  # device/session identity for ADK (POC)
+            logger.info(f"🆔 [VOICE] Using session_id/user_id: {session_id}")
             hydrate_session_state(session_id)
+
+            # CRM writes run after the response so they never share ADK's OTEL context
+            background_tasks.add_task(_crm_log_inbound, session_id, transcribed_text)
 
             if AGENT_MODE == "adidas":
                 if RETURNING_RE.search(transcribed_text or ""):
                     reset_adidas_session(session_id, conversation_history)
+                    answer = "Welcome back — what you looking for?"
                     result = {
-                        "answer": "Welcome back — what you looking for?",
+                        "answer": answer,
                         "session_id": session_id,
                         "transcribed_text": transcribed_text,
                         "tile_meta": {"has_more": False},
                     }
                     if return_audio and is_openai_configured():
                         result["audio_response"] = text_to_speech_whisper(
-                            "Welcome back — what you looking for?", voice="alloy"
+                            answer, voice="alloy"
                         )
+                    background_tasks.add_task(_crm_log_outbound, session_id, answer)
                     return result
 
                 on_user_turn(session_id, transcribed_text, conversation_history)
@@ -598,6 +754,7 @@ async def ask_voice(
                         result["audio_response"] = text_to_speech_whisper(
                             strip_agent_markup(commerce.response_text), voice="alloy"
                         )
+                    background_tasks.add_task(_crm_log_outbound, session_id, commerce.response_text)
                     return result
 
                 combo_resp = try_show_and_describe_response(
@@ -617,6 +774,7 @@ async def ask_voice(
                         result["audio_response"] = text_to_speech_whisper(
                             strip_agent_markup(combo_resp), voice="alloy"
                         )
+                    background_tasks.add_task(_crm_log_outbound, session_id, combo_resp)
                     return result
 
                 compare_resp = try_comparison_response(
@@ -636,6 +794,7 @@ async def ask_voice(
                         result["audio_response"] = text_to_speech_whisper(
                             strip_agent_markup(compare_resp), voice="alloy"
                         )
+                    background_tasks.add_task(_crm_log_outbound, session_id, compare_resp)
                     return result
 
                 fast = try_fast_browse_response(
@@ -656,6 +815,7 @@ async def ask_voice(
                         result["audio_response"] = text_to_speech_whisper(
                             strip_agent_markup(fast_text), voice="alloy"
                         )
+                    background_tasks.add_task(_crm_log_outbound, session_id, fast_text)
                     return result
 
                 ref_resp = try_referenced_product_response(
@@ -675,6 +835,7 @@ async def ask_voice(
                         result["audio_response"] = text_to_speech_whisper(
                             strip_agent_markup(ref_resp), voice="alloy"
                         )
+                    background_tasks.add_task(_crm_log_outbound, session_id, ref_resp)
                     return result
 
                 best_resp = try_best_recommendation_response(
@@ -694,6 +855,7 @@ async def ask_voice(
                         result["audio_response"] = text_to_speech_whisper(
                             strip_agent_markup(best_resp), voice="alloy"
                         )
+                    background_tasks.add_task(_crm_log_outbound, session_id, best_resp)
                     return result
 
                 prior_resp = try_describe_prior_items_response(
@@ -713,6 +875,7 @@ async def ask_voice(
                         result["audio_response"] = text_to_speech_whisper(
                             strip_agent_markup(prior_resp), voice="alloy"
                         )
+                    background_tasks.add_task(_crm_log_outbound, session_id, prior_resp)
                     return result
             
             try:
@@ -725,6 +888,8 @@ async def ask_voice(
                 contextual_query = _inject_active_product_context(session_id, history_payload)
             else:
                 contextual_query = _inject_active_product_context(session_id, transcribed_text)
+            if AGENT_MODE != "adidas":
+                contextual_query = _inject_crm_session_id(session_id, contextual_query)
 
             logger.info(f"💬 [VOICE] History turns loaded for session: {session_id}")
             logger.info(f"🎤 [VOICE] Sending contextual query to agent: {contextual_query[:100]}...")
@@ -733,15 +898,15 @@ async def ask_voice(
             
             # Create session if it doesn't exist
             try:
-                await session_service.create_session(user_id="user123", session_id=session_id, app_name=APP_NAME)
+                await session_service.create_session(user_id=user_id, session_id=session_id, app_name=APP_NAME)
             except Exception:
                 pass
             
             response_text = ""
-            async for event in runner.run_async(user_id="user123", session_id=session_id, new_message=user_message):
+            async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=user_message):
                 if event.is_final_response() and event.content and event.content.parts:
                     response_text = event.content.parts[0].text
-                    break
+                    # Do not break — early cancel of ADK's async generator leaks OTEL context
 
             if AGENT_MODE == "adidas":
                 response_text, tile_meta = sanitize_adidas_response(
@@ -756,6 +921,11 @@ async def ask_voice(
                 )
                 update_session_from_response(session_id, response_text)
             else:
+                try:
+                    from .boutique_response import sanitize_boutique_response
+                except ImportError:
+                    from boutique_response import sanitize_boutique_response
+                response_text = sanitize_boutique_response(response_text, transcribed_text)
                 tile_meta = {}
             
             # Generate audio response using OpenAI TTS
@@ -777,6 +947,8 @@ async def ask_voice(
             add_to_conversation(session_id, "user", transcribed_text)
             add_to_conversation(session_id, "assistant", response_text)
             logger.info(f"💾 [VOICE] Stored conversation for session: {session_id}")
+
+            background_tasks.add_task(_crm_log_outbound, session_id, response_text)
             
             logger.info(f"Returning response - answer: {response_text[:100]}..., transcribed: {transcribed_text[:50]}...")
             result = {

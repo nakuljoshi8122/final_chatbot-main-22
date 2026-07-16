@@ -11,13 +11,18 @@ import {
   Keyboard,
   Linking,
   Pressable,
+  Alert,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 import { apiService, ChatMessage, TileProduct } from '../services/api-fetch';
-import { loadStoredSessionId, saveStoredSessionId } from '../utils/chatSession';
+import {
+  clearStoredSessionId,
+  loadStoredSessionId,
+  saveStoredSessionId,
+} from '../utils/chatSession';
 import { parseAgentResponse } from '@/utils/parseTiles';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useVoiceRecording } from '../hooks/useVoiceRecording';
@@ -26,6 +31,7 @@ import ConversationalVoiceScreen from './ConversationalVoiceScreen';
 import PseudoDuplexVoiceScreen from './PseudoDuplexVoiceScreen';
 import { ProductTileGrid } from './ProductTileCard';
 import { ChatTableList } from './ChatTableView';
+import { pushSellerListingsToChat } from '@/services/inventoryStore';
 
 interface ChatInterfaceProps {
   initialSessionId?: string;
@@ -111,6 +117,7 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
 
       await saveStoredSessionId(activeId);
       setSessionReady(true);
+      void pushSellerListingsToChat();
     };
 
     restoreSession();
@@ -155,6 +162,35 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
     if (product.id && !product.id.startsWith('tile-')) {
       apiService.setActiveProduct(sessionId, product.id);
     }
+  };
+
+  const startNewChat = () => {
+    if (isLoading) return;
+    Alert.alert('New chat', 'Start a fresh conversation? Current chat stays saved on the server.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'New chat',
+        style: 'destructive',
+        onPress: async () => {
+          const newId = apiService.generateSessionId();
+          await clearStoredSessionId();
+          await saveStoredSessionId(newId);
+          setSessionId(newId);
+          setMessages([]);
+          setInputText('');
+          setIsVoiceMode(false);
+          setShowVoiceConversation(false);
+          setShowPseudoDuplex(false);
+          setIsLoading(false);
+          try {
+            await resetRecording();
+          } catch {
+            // ignore
+          }
+          Keyboard.dismiss();
+        },
+      },
+    ]);
   };
 
   const openCheckout = async (url: string) => {
@@ -367,6 +403,17 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
     >
       <View style={[styles.topBar, { paddingTop: headerPaddingTop }]}>
         <Text style={styles.logo}>adidas</Text>
+        <TouchableOpacity
+          onPress={startNewChat}
+          style={styles.newChatBtn}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Start new chat"
+          disabled={isLoading}
+        >
+          <Ionicons name="create-outline" size={20} color="#000000" />
+          <Text style={styles.newChatText}>New</Text>
+        </TouchableOpacity>
       </View>
 
       {apiNotice ? (
@@ -483,6 +530,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
     backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   logo: {
     fontFamily: FONT_BOLD,
@@ -490,6 +540,21 @@ const styles = StyleSheet.create({
     color: '#000000',
     textTransform: 'lowercase',
     letterSpacing: -0.5,
+  },
+  newChatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 16,
+  },
+  newChatText: {
+    fontFamily: FONT_BOLD,
+    fontSize: 12,
+    color: '#000000',
   },
   notice: {
     backgroundColor: '#FFF8E1',

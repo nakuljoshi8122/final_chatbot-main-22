@@ -46,13 +46,28 @@ function normalizeFeatures(t: Record<string, unknown>): string[] {
   return fallback.slice(0, 2);
 }
 
-const API_BASE = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.134:8000').replace(/\/$/, '');
+const API_BASE = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.9:8000').replace(/\/$/, '');
+
+/** Point product-images at the Expo API host (agent may embed a stale LAN IP). */
+function rewriteProductImageHost(url: string): string {
+  if (!url || !API_BASE) return url;
+  try {
+    const pathMatch = url.match(/\/product-images\/[^?\s#]+/i);
+    if (pathMatch) return `${API_BASE}${pathMatch[0]}`;
+  } catch {
+    // keep original
+  }
+  return url;
+}
 
 function resolveTileImg(t: Record<string, unknown>, name: string): string {
   const id = t.id ? String(t.id) : '';
+  const sku = id.startsWith('tile-') ? id.slice(5) : id;
   const img = t.img ? String(t.img) : '';
-  if (img && !img.includes('via.placeholder.com')) return img;
-  if (id && !id.startsWith('tile-')) return `${API_BASE}/product-images/${id}.jpg`;
+  if (img && !img.includes('via.placeholder.com')) {
+    return rewriteProductImageHost(img);
+  }
+  if (sku) return `${API_BASE}/product-images/${sku}.jpg`;
   return placeholderImg(name);
 }
 
@@ -119,7 +134,59 @@ function parseAllTiles(raw: string): TileProduct[] {
     ingestTilePayload(match[0]?.trim() ?? '', tiles, seen, tiles.length);
   }
 
+  // Fallback: model dumped markdown photos + optional pinterest links instead of TILES
+  if (tiles.length === 0) {
+    recoverTilesFromMarkdown(raw, tiles, seen);
+  }
+
   return tiles.slice(0, 20);
+}
+
+const MD_IMG_RE = /!\[([^\]]*)\]\(([^)\s]+)\)/g;
+const MD_LINK_RE = /\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g;
+const PRODUCT_IMG_SKU_RE = /\/product-images\/([A-Za-z0-9\-]+)\.(?:jpe?g|png|webp)/i;
+
+function recoverTilesFromMarkdown(
+  raw: string,
+  tiles: TileProduct[],
+  seen: Set<string>,
+): void {
+  const images = [...raw.matchAll(MD_IMG_RE)];
+  if (!images.length) return;
+
+  const links = [...raw.matchAll(MD_LINK_RE)].map((m) => ({
+    label: m[1] || '',
+    url: m[2] || '',
+  }));
+
+  images.forEach((m, i) => {
+    const name = (m[1] || '').trim() || `Product ${i + 1}`;
+    const imgRaw = m[2] || '';
+    const skuMatch = imgRaw.match(PRODUCT_IMG_SKU_RE);
+    const sku = skuMatch?.[1] || `md-${i}`;
+    const id = `tile-${sku}`;
+    if (seen.has(id)) return;
+    const nearbyLink =
+      links.find((l) => /pinterest|pin\//i.test(l.url)) ||
+      links[i] ||
+      links.find((l) => /view here/i.test(l.label));
+    const priceMatch = raw.match(
+      new RegExp(
+        name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^$\\n]{0,80}(\\$\\d+(?:\\.\\d+)?)',
+        'i',
+      ),
+    );
+    seen.add(id);
+    tiles.push({
+      id,
+      name,
+      price: priceMatch?.[1] || '',
+      url: nearbyLink?.url || rewriteProductImageHost(imgRaw),
+      img: rewriteProductImageHost(imgRaw),
+      tag: 'Boutique',
+      features: [],
+    });
+  });
 }
 
 function parseHtmlTable(html: string): ChatTable | null {
@@ -253,6 +320,9 @@ export function cleanDisplayText(raw: string): string {
   text = text.replace(/<\/?thead>/gi, ' ');
   text = text.replace(/<\/?tbody>/gi, ' ');
   text = text.replace(/<\/?t[rhd][^>]*>/gi, ' ');
+  // Markdown images the model sometimes dumps into chat text
+  text = text.replace(/!\[[^\]]*\]\([^)]+\)/g, ' ');
+  text = text.replace(/https?:\/\/\S*\/product-images\/\S+/gi, ' ');
   text = text.replace(/<[^>]+>/g, ' ');
 
   text = text

@@ -1,0 +1,482 @@
+[
+  {
+    "sku": "HC-VASE-TP10",
+    "name": "Hand-Painted Terracotta Vase",
+    "price": "$45",
+    "category": "Handicrafts",
+    "description": "10 in tall; hand-painted botanical motif; water-resistant interior for dried florals",
+    "categoryNotes": "Care: Dust only; not dishwasher/microwave safe"
+  },
+  {
+    "sku": "HC-ELE-TEAK5",
+    "name": "Carved Teakwood Elephant",
+    "price": "$30",
+    "category": "Handicrafts",
+    "description": "~5 in tall, 6 in long; hand-carved teak; traditional standing pose",
+    "categoryNotes": "Notes: Decorative collectible; not a toy for under 3"
+  },
+  {
+    "sku": "HC-WALL-BR28",
+    "name": "Brass Mandala Wall Plate",
+    "price": "$62",
+    "category": "Handicrafts",
+    "description": "28 cm diameter etched brass; hanging loop included",
+    "categoryNotes": "Care: Wipe with dry cloth; occasional brass polish"
+  },
+  {
+    "sku": "HC-BASK-JU3",
+    "name": "Handwoven Jute Basket Set",
+    "price": "$38",
+    "category": "Handicrafts",
+    "description": "Set of 3 nested baskets; natural jute; max load ~5 kg each",
+    "categoryNotes": "Use: Storage, planters (with liner), picnic carry"
+  },
+  {
+    "sku": "HC-MUG-BP01",
+    "name": "Ceramic Blue Pottery Mug",
+    "price": "$18",
+    "category": "Handicrafts",
+    "description": "300 ml; food-safe glaze; Jaipur-style blue floral pattern",
+    "categoryNotes": "Care: Hand wash preferred; microwave safe up to 2 min"
+  },
+  {
+    "sku": "HC-RUN-BP72",
+    "name": "Block-Print Cotton Table Runner",
+    "price": "$26",
+    "category": "Handicrafts",
+    "description": "72 in x 14 in; vegetable-dye block print on cotton",
+    "categoryNotes": "Care: Cold wash gentle; line dry"
+  },
+  {
+    "sku": "HC-INC-SW40",
+    "name": "Sandalwood Incense Gift Box",
+    "price": "$15",
+    "category": "Handicrafts",
+    "description": "40 sticks + brass holder; sandalwood scent",
+    "categoryNotes": "Notes: Burn on heatproof surface; supervise while lit"
+  },
+  {
+    "sku": "HC-CUSH-SL18",
+    "name": "Hand-Embroidered Silk Cushion Cover",
+    "price": "$35",
+    "category": "Handicrafts",
+    "description": "18x18 in; silk blend face; zipper closure; insert not included",
+    "categoryNotes": "Care: Dry clean only"
+  },
+  {
+    "sku": "HC-BRAC-RG01",
+    "name": "Recycled Glass Bead Bracelet",
+    "price": "$14",
+    "category": "Handicrafts",
+    "description": "Stretch fit; ~7 in; cobalt & amber recycled glass beads",
+    "categoryNotes": "Care: Avoid prolonged water/perfume"
+  },
+  {
+    "sku": "HC-DIYA-CL6",
+    "name": "Clay Diya Lamp Set Pack of 6",
+    "price": "$12",
+    "category": "Handicrafts",
+    "description": "Traditional clay oil lamps; ~2.5 in diameter each",
+    "categoryNotes": "Use: Festive décor; oil/ghee candles in ventilated spaces only"
+  },
+  {
+    "sku": "HC-ART-MD-A3",
+    "name": "Madhubani Art Print A3",
+    "price": "$28",
+    "category": "Handicrafts",
+    "description": "A3 archival print on 300gsm paper; signed artist stamp",
+    "categoryNotes": ""
+  },
+  {
+    "sku": "HC-DESK-BM01",
+    "name": "Bamboo Desk Organizer",
+    "price": "$32",
+    "category": "Handicrafts",
+    "description": "3 compartments; 25x12x10 cm; unfinished bamboo",
+    "categoryNotes": "Care: Wipe dry; avoid soaking"
+  },
+  {
+    "sku": "HC-COAS-WD4",
+    "name": "Lacquered Wooden Coaster Set",
+    "price": "$20",
+    "category": "Handicrafts",
+    "description": "Set of 4; 10 cm round; lacquered mango wood",
+    "categoryNotes": "Care: Wipe clean; not dishwasher safe"
+  },
+  {
+    "sku": "HC-NOTE-HP80",
+    "name": "Handmade Paper Notebook",
+    "price": "$11",
+    "category": "Handicrafts",
+    "description": "80 pages unlined; A5; cotton rag paper cover",
+    "categoryNotes": "Notes: Acid-free pages; fountain-pen friendly"
+  },
+  {
+    "sku": "HC-CAND-BRS",
+    "name": "Miniature Brass Candle Stand",
+    "price": "$24",
+    "category": "Handicrafts",
+    "description": "8 cm tall; fits tealights; antique finish",
+    "categoryNotes": "Care: Cool completely before handling after use"
+  },
+  {
+    "sku": "HC-JEW-SI15",
+    "name": "Stone-Inlay Jewelry Box",
+    "price": "$54",
+    "category": "Handicrafts",
+    "description": "15x10x6 cm; marble lid with floral inlay; velvet lined",
+    "categoryNotes": ""
+  },
+  {
+    "sku": "HC-PLACE-PL2",
+    "name": "Woven Palm Leaf Placemat Pair",
+    "price": "$16",
+    "category": "Handicrafts",
+    "description": "2 mats; 40x30 cm oval; natural palm leaf",
+    "categoryNotes": "Care: Spot clean; air dry flat"
+  },
+  {
+    "sku": "HC-BOT-CU950",
+    "name": "Copper Water Bottle 950ml",
+    "price": "$29",
+    "category": "Handicrafts",
+    "description": "Pure copper; 950 ml; leak-resistant lid",
+    "categoryNotes": "Care: Clean with lemon + salt; rinse regularly"
+  },
+  {
+    "sku": "HC-PLAN-TT6",
+    "name": "Terracotta Planter with Tray",
+    "price": "$22",
+    "category": "Handicrafts",
+    "description": "6 in diameter; drainage hole + saucer",
+    "categoryNotes": "Use: Indoor herbs/succulents; porous clay may sweat lightly"
+  },
+  {
+    "sku": "HC-THR-WL50",
+    "name": "Handloom Wool Throw Blanket",
+    "price": "$68",
+    "category": "Handicrafts",
+    "description": "50x70 in; merino-blend wool; fringed edges",
+    "categoryNotes": "Care: Dry clean or gentle wool wash cold"
+  },
+  {
+    "sku": "AP-SHIRT-CLB",
+    "name": "Organic Cotton Linen Blend Shirt",
+    "price": "$55",
+    "category": "Apparel",
+    "description": "S, M, L, XL | Fabric: ~60% organic cotton / 40% linen | Fit: relaxed",
+    "categoryNotes": "Sizes: S, M, L, XL | Fabric: ~60% organic cotton / 40% linen | Fit: relaxed; Care: Cold wash gentle; hang dry"
+  },
+  {
+    "sku": "AP-CHINO-SL",
+    "name": "Classic Slim Chinos",
+    "price": "$48",
+    "category": "Apparel",
+    "description": "28–38 waist | Colorways: sand, olive, navy | Stretch cotton twill",
+    "categoryNotes": "Sizes: 28–38 waist | Colorways: sand, olive, navy | Stretch cotton twill; Care: Machine wash cold; tumble low"
+  },
+  {
+    "sku": "AP-SWEAT-MER",
+    "name": "Merino Crew Neck Sweater",
+    "price": "$72",
+    "category": "Apparel",
+    "description": "XS–XL | 100% merino | Lightweight midlayer",
+    "categoryNotes": "Sizes: XS–XL | 100% merino | Lightweight midlayer; Care: Hand wash or wool cycle; lay flat dry"
+  },
+  {
+    "sku": "AP-JACK-DNM",
+    "name": "Everyday Denim Jacket",
+    "price": "$85",
+    "category": "Apparel",
+    "description": "S–XXL | Mid-wash indigo | Unisex cut",
+    "categoryNotes": "Sizes: S–XXL | Mid-wash indigo | Unisex cut; Notes: Expect slight fade with wash"
+  },
+  {
+    "sku": "AP-SHORT-R7",
+    "name": "Breathable Running Shorts 7 Inch",
+    "price": "$34",
+    "category": "Apparel",
+    "description": "S–XL | Quick-dry polyester | Built-in liner",
+    "categoryNotes": "Sizes: S–XL | Quick-dry polyester | Built-in liner; Care: Wash after sweat; no fabric softener"
+  },
+  {
+    "sku": "AP-TEE-OC3",
+    "name": "Organic Cotton Tee 3-Pack",
+    "price": "$42",
+    "category": "Apparel",
+    "description": "XS–XXL | Colors: white, heather grey, black",
+    "categoryNotes": "Sizes: XS–XXL | Colors: white, heather grey, black"
+  },
+  {
+    "sku": "AP-HOOD-TRV",
+    "name": "Lightweight Travel Hoodie",
+    "price": "$58",
+    "category": "Apparel",
+    "description": "S–XL | French terry cotton | Kangaroo pocket",
+    "categoryNotes": "Sizes: S–XL | French terry cotton | Kangaroo pocket; Care: Machine wash cold"
+  },
+  {
+    "sku": "AP-PANT-PAL",
+    "name": "Wide-Leg Palazzo Pants",
+    "price": "$46",
+    "category": "Apparel",
+    "description": "S–XL | Rayon blend | Elastic waist",
+    "categoryNotes": "Sizes: S–XL | Rayon blend | Elastic waist"
+  },
+  {
+    "sku": "AP-VEST-QLT",
+    "name": "Quilted Vest",
+    "price": "$64",
+    "category": "Apparel",
+    "description": "S–XL | Packable | Water-resistant shell",
+    "categoryNotes": "Sizes: S–XL | Packable | Water-resistant shell; Notes: Not fully waterproof"
+  },
+  {
+    "sku": "AP-SKIRT-LIN",
+    "name": "Linen Midi Skirt",
+    "price": "$52",
+    "category": "Apparel",
+    "description": "XS–L | Side zip | Natural linen tone",
+    "categoryNotes": "Sizes: XS–L | Side zip | Natural linen tone; Care: Steam preferred over hard iron"
+  },
+  {
+    "sku": "AP-WIND-SF",
+    "name": "Softshell Windbreaker",
+    "price": "$78",
+    "category": "Apparel",
+    "description": "S–XXL | DWR finish | Packs into pouch",
+    "categoryNotes": "Sizes: S–XXL | DWR finish | Packs into pouch; Use: Light rain / wind; not for heavy storms"
+  },
+  {
+    "sku": "AP-LEG-YR",
+    "name": "Yoga Leggings High-Rise",
+    "price": "$44",
+    "category": "Apparel",
+    "description": "XS–XL | Compression blend | Hidden waist pocket",
+    "categoryNotes": "Sizes: XS–XL | Compression blend | Hidden waist pocket; Care: Wash inside-out; hang dry"
+  },
+  {
+    "sku": "AP-FLAN-OS",
+    "name": "Flannel Overshirt",
+    "price": "$50",
+    "category": "Apparel",
+    "description": "S–XL | Cotton flannel | Button front",
+    "categoryNotes": "Sizes: S–XL | Cotton flannel | Button front"
+  },
+  {
+    "sku": "AP-SCARF-SK90",
+    "name": "Silk Scarf 90cm",
+    "price": "$36",
+    "category": "Apparel",
+    "description": "90x90 cm square | Digital print | Hand-rolled hem",
+    "categoryNotes": "Care: Dry clean"
+  },
+  {
+    "sku": "AP-TOTE-CV",
+    "name": "Canvas Tote Bag",
+    "price": "$25",
+    "category": "Apparel",
+    "description": "15 oz cotton canvas | Inner pocket | Holds ~12 kg",
+    "categoryNotes": "Care: Spot clean or gentle machine wash"
+  },
+  {
+    "sku": "AP-POLO-PF",
+    "name": "Performance Polo",
+    "price": "$40",
+    "category": "Apparel",
+    "description": "S–XXL | Moisture-wicking | UPF 30",
+    "categoryNotes": "Sizes: S–XXL | Moisture-wicking | UPF 30; Use: Golf / casual office"
+  },
+  {
+    "sku": "AP-CAP-CRD",
+    "name": "Corduroy Cap",
+    "price": "$22",
+    "category": "Apparel",
+    "description": "One size (adjustable) | 6-panel | Unstructured",
+    "categoryNotes": ""
+  },
+  {
+    "sku": "AP-BEAN-KT",
+    "name": "Knit Beanie",
+    "price": "$18",
+    "category": "Apparel",
+    "description": "Acrylic-wool blend | Cuffed | One size",
+    "categoryNotes": "Care: Hand wash cold"
+  },
+  {
+    "sku": "AP-SOCK-A5",
+    "name": "Ankle Socks 5-Pack",
+    "price": "$16",
+    "category": "Apparel",
+    "description": "M (EU 39–42), L (EU 43–46) | Cotton blend",
+    "categoryNotes": "Sizes: M (EU 39–42), L (EU 43–46) | Cotton blend"
+  },
+  {
+    "sku": "AP-TRENCH-BL",
+    "name": "Belted Trench Coat",
+    "price": "$120",
+    "category": "Apparel",
+    "description": "0–12 (petite & regular lengths) | Water-resistant cotton",
+    "categoryNotes": "Sizes: 0–12 (petite & regular lengths) | Water-resistant cotton; Notes: Removable belt; dry clean recommended"
+  },
+  {
+    "sku": "SK-SERUM-VC30",
+    "name": "Rejuvenating Vitamin C Serum",
+    "price": "$28",
+    "category": "Skincare",
+    "description": "30 ml | Key: vitamin C derivative, HA, aloe | Fragrance-free",
+    "categoryNotes": "Size: 30 ml | Key: vitamin C derivative, HA, aloe | Fragrance-free; Use: AM after cleanse; follow with SPF | Patch test recommended"
+  },
+  {
+    "sku": "SK-MOIST-AL50",
+    "name": "Aloe Vera Hydrating Moisturizer",
+    "price": "$22",
+    "category": "Skincare",
+    "description": "50 ml | Non-greasy gel-cream | Aloe + vitamin E",
+    "categoryNotes": "Size: 50 ml | Non-greasy gel-cream | Aloe + vitamin E; Use: AM/PM after serum"
+  },
+  {
+    "sku": "SK-CLN-FF150",
+    "name": "Gentle Foaming Cleanser",
+    "price": "$18",
+    "category": "Skincare",
+    "description": "150 ml | Amino-acid foam | pH ~5.5",
+    "categoryNotes": "Size: 150 ml | Amino-acid foam | pH ~5.5; Notes: Suitable for daily use; does not strip oils heavily"
+  },
+  {
+    "sku": "SK-TON-BM100",
+    "name": "Balancing Toner Mist",
+    "price": "$20",
+    "category": "Skincare",
+    "description": "100 ml spray | Witch hazel (alcohol-free) + cucumber",
+    "categoryNotes": "Size: 100 ml spray | Witch hazel (alcohol-free) + cucumber; Use: After cleanse; shake before use"
+  },
+  {
+    "sku": "SK-NIGHT-OR50",
+    "name": "Overnight Repair Night Cream",
+    "price": "$34",
+    "category": "Skincare",
+    "description": "50 ml | Niacinamide + ceramides | Richer texture",
+    "categoryNotes": "Size: 50 ml | Niacinamide + ceramides | Richer texture; Use: PM only; avoid eye area"
+  },
+  {
+    "sku": "SK-SPF-MN50",
+    "name": "Mineral SPF 30 Daily Shield",
+    "price": "$26",
+    "category": "Skincare",
+    "description": "50 ml | Zinc oxide mineral filter | Tint-free",
+    "categoryNotes": "Size: 50 ml | Zinc oxide mineral filter | Tint-free; Use: Last step AM; reapply every 2 hours outdoors"
+  },
+  {
+    "sku": "SK-LIP-SP15",
+    "name": "Lip Balm SPF 15 Duo Pack",
+    "price": "$10",
+    "category": "Skincare",
+    "description": "2 tubes | Shea + beeswax | Light mint",
+    "categoryNotes": "Notes: Not vegan (beeswax)"
+  },
+  {
+    "sku": "SK-MASK-CL75",
+    "name": "Clay Detox Face Mask",
+    "price": "$19",
+    "category": "Skincare",
+    "description": "75 ml | Kaolin + bentonite | Weekly use 1–2x",
+    "categoryNotes": "Size: 75 ml | Kaolin + bentonite | Weekly use 1–2x; Use: 8–10 minutes; rinse; moisturize after"
+  },
+  {
+    "sku": "SK-EYE-CF15",
+    "name": "Eye Gel with Caffeine",
+    "price": "$24",
+    "category": "Skincare",
+    "description": "15 ml | Cooling roller | Caffeine + green tea",
+    "categoryNotes": "Size: 15 ml | Cooling roller | Caffeine + green tea; Use: AM under eyes; pat gently"
+  },
+  {
+    "sku": "SK-SHEET-H5",
+    "name": "Hydrating Sheet Mask Box of 5",
+    "price": "$15",
+    "category": "Skincare",
+    "description": "5 single-use masks | HA focused | 15–20 min wear",
+    "categoryNotes": "Notes: Single use; discard after"
+  },
+  {
+    "sku": "SK-SCALP-SS50",
+    "name": "Scalp Soothing Serum",
+    "price": "$27",
+    "category": "Skincare",
+    "description": "50 ml dropper | Tea tree + panthenol | Non-greasy",
+    "categoryNotes": "Size: 50 ml dropper | Tea tree + panthenol | Non-greasy; Use: On scalp before bed 3x/week"
+  },
+  {
+    "sku": "SK-BODY-SH200",
+    "name": "Body Butter Shea Unscented",
+    "price": "$23",
+    "category": "Skincare",
+    "description": "200 ml jar | 25% shea | Fragrance-free",
+    "categoryNotes": "Size: 200 ml jar | 25% shea | Fragrance-free"
+  },
+  {
+    "sku": "SK-HAND-TR40",
+    "name": "Hand Cream Travel Tube",
+    "price": "$9",
+    "category": "Skincare",
+    "description": "40 ml | Glycerin + oat | Pocket size",
+    "categoryNotes": "Size: 40 ml | Glycerin + oat | Pocket size; Notes: Absorbs in ~60 seconds"
+  },
+  {
+    "sku": "SK-BHA-TN100",
+    "name": "Clarifying BHA Toner",
+    "price": "$25",
+    "category": "Skincare",
+    "description": "100 ml | 1% BHA (salicylic) | For oily/congested skin",
+    "categoryNotes": "Size: 100 ml | 1% BHA (salicylic) | For oily/congested skin"
+  },
+  {
+    "sku": "SK-PEEL-EN30",
+    "name": "Brightening Enzyme Peel",
+    "price": "$31",
+    "category": "Skincare",
+    "description": "30 ml | Papaya + pineapple enzymes | Weekly",
+    "categoryNotes": "Size: 30 ml | Papaya + pineapple enzymes | Weekly; Use: 5 minutes max; rinse thoroughly"
+  },
+  {
+    "sku": "SK-OIL-RH30",
+    "name": "Rosehip Facial Oil",
+    "price": "$29",
+    "category": "Skincare",
+    "description": "30 ml | Cold-pressed rosehip | Evening use",
+    "categoryNotes": "Size: 30 ml | Cold-pressed rosehip | Evening use; Notes: May stain pillowcases; patch test if acne-prone"
+  },
+  {
+    "sku": "SK-MIC-SW200",
+    "name": "Micellar Water Sensitive",
+    "price": "$14",
+    "category": "Skincare",
+    "description": "200 ml | No rinse needed | Sensitive formula",
+    "categoryNotes": "Size: 200 ml | No rinse needed | Sensitive formula; Use: Cotton pad makeup removal / light cleanse"
+  },
+  {
+    "sku": "SK-SPOT-AG15",
+    "name": "Acne Spot Gel",
+    "price": "$13",
+    "category": "Skincare",
+    "description": "15 ml | 2.5% benzoyl peroxide | Targeted PM use",
+    "categoryNotes": "Size: 15 ml | 2.5% benzoyl peroxide | Targeted PM use"
+  },
+  {
+    "sku": "SK-SUN-AG150",
+    "name": "After-Sun Aloe Gel",
+    "price": "$12",
+    "category": "Skincare",
+    "description": "150 ml | 99% aloe vera gel | Cooling",
+    "categoryNotes": "Size: 150 ml | 99% aloe vera gel | Cooling; Use: After sun exposure; refrigerate optional"
+  },
+  {
+    "sku": "SK-KIT-TR3",
+    "name": "Travel Mini Kit Cleanser Moisturizer SPF",
+    "price": "$32",
+    "category": "Skincare",
+    "description": "3x 20 ml minis | TSA-friendly pouch",
+    "categoryNotes": "Notes: Same formulas as full sizes at travel volume"
+  }
+]

@@ -7,12 +7,14 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
 import { Brand } from '@/constants/Brand';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { contentBottomPadding } = useScreenInsets();
   const handleContact = (type: string, value: string) => {
     switch (type) {
@@ -81,6 +83,26 @@ export default function ProfileScreen() {
               </ThemedText>
             </View>
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            Seller
+          </ThemedText>
+          <TouchableOpacity
+            style={styles.sellerButton}
+            onPress={() => router.push('/inventory')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="cube-outline" size={22} color="white" />
+            <View style={styles.sellerButtonTextWrap}>
+              <ThemedText style={styles.sellerButtonTitle}>Inventory</ThemedText>
+              <ThemedText style={styles.sellerButtonSub}>
+                Manage listings · Handicrafts, Apparel, Skincare
+              </ThemedText>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.8)" />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
@@ -249,6 +271,28 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 22,
     color: Brand.colors.highlight,
+  },
+  sellerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Brand.colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 4,
+    gap: 12,
+  },
+  sellerButtonTextWrap: {
+    flex: 1,
+  },
+  sellerButtonTitle: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  sellerButtonSub: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 13,
+    marginTop: 2,
   },
   contactButtons: {
     flexDirection: 'row',

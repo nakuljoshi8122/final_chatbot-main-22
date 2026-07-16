@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: botbotbot-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-botbotbot}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-botbotbot}"
+      POSTGRES_DB: "${POSTGRES_DB:-botbotbot}"
+    volumes:
+      - botbotbot_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-botbotbot} -d ${POSTGRES_DB:-botbotbot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  botbotbot_pgdata:

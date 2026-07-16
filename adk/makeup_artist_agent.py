@@ -1,15 +1,18 @@
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 from google.adk.tools import FunctionTool
 from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
+from google.adk.sessions import DatabaseSessionService
+
 try:
     from .data import get_artist_profile
     from .llm_config import build_agent_kwargs
 except ImportError:
     from data import get_artist_profile
     from llm_config import build_agent_kwargs
-from pathlib import Path
-from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
@@ -41,7 +44,10 @@ Be personal, professional, and helpful in your responses. Use the database infor
 )
 
 # Set up session service and runner
-session_service = InMemorySessionService()
+_db_url = os.getenv("DATABASE_URL")
+if not _db_url:
+    raise RuntimeError("DATABASE_URL is required for DatabaseSessionService")
+session_service = DatabaseSessionService(db_url=_db_url)
 runner = Runner(agent=agent, app_name="makeup_artist_app", session_service=session_service)
 
 # Export both for use in main.py

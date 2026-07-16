@@ -8,7 +8,7 @@ def reset_adidas_session(session_id: str, conversation_history: dict) -> None:
     if not session_id:
         return
 
-    # Clear chat memory (Mongo + in-process cache)
+    # Clear chat memory (Postgres + in-process cache)
     try:
         conversation_history.invalidate(session_id)  # type: ignore[attr-defined]
     except Exception:
