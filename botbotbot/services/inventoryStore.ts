@@ -13,10 +13,7 @@ import {
 const FILE_NAME = 'seller_inventory_v1.json';
 const IMAGES_DIR = 'seller-images';
 
-const API_BASE = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.9:8000').replace(
-  /\/$/,
-  '',
-);
+import { API_BASE } from '@/services/apiBase';
 
 export type InventoryItem = {
   id: string;
@@ -33,6 +30,8 @@ export type InventoryItem = {
   updatedAt: string;
   /** seed = from boutiqueSeed; seller = listed via add-product UI */
   source?: 'seed' | 'seller';
+  /** Shop this listing belongs to */
+  storeId?: string;
 };
 
 export type InventoryFormInput = {
@@ -45,6 +44,7 @@ export type InventoryFormInput = {
   quantity: number;
   status: 'active' | 'draft';
   imageUri?: string;
+  storeId?: string;
 };
 
 type SeedRow = {
@@ -169,7 +169,74 @@ export async function loadInventory(): Promise<InventoryItem[]> {
 
 export async function getInventoryItem(id: string): Promise<InventoryItem | null> {
   const items = await readAll();
-  return items.find((item) => item.id === id) ?? null;
+  const key = id.trim();
+  return (
+    items.find((item) => item.id === key || item.sku === key) ??
+    items.find((item) => item.sku.toUpperCase() === key.toUpperCase()) ??
+    null
+  );
+}
+
+/** Pull a chat/API-listed product into local inventory so edit/save works. */
+export async function hydrateInventoryFromApi(row: {
+  sku: string;
+  name: string;
+  category?: string;
+  price?: string;
+  description?: string;
+  category_notes?: string;
+  quantity?: number;
+  status?: string;
+  img?: string;
+  store_id?: string;
+}): Promise<InventoryItem> {
+  const items = await readAll();
+  const sku = String(row.sku || '').trim().toUpperCase();
+  if (!sku) throw new Error('Product SKU missing');
+
+  const category = isSellerCategory(String(row.category || ''))
+    ? (row.category as SellerCategory)
+    : 'Handicrafts';
+  const statusRaw = String(row.status || 'active').toLowerCase();
+  const status: InventoryStatus =
+    statusRaw === 'draft' ||
+    statusRaw === 'archive' ||
+    statusRaw === 'trash' ||
+    statusRaw === 'active'
+      ? statusRaw
+      : 'active';
+
+  const now = new Date().toISOString();
+  const next: InventoryItem = {
+    id: sku,
+    sku,
+    name: String(row.name || '').trim() || sku,
+    category,
+    price: String(row.price || '').trim(),
+    description: String(row.description || '').trim(),
+    categoryNotes: String(row.category_notes || '').trim(),
+    quantity: Math.max(0, Math.floor(Number(row.quantity) || 0)),
+    status,
+    imageUri: row.img || productImageUrl(sku),
+    createdAt: now,
+    updatedAt: now,
+    source: 'seller',
+    storeId: row.store_id || undefined,
+  };
+
+  const index = items.findIndex(
+    (item) => item.id === sku || item.sku.toUpperCase() === sku,
+  );
+  if (index >= 0) {
+    next.createdAt = items[index].createdAt;
+    next.imageUri = items[index].imageUri || next.imageUri;
+    items[index] = { ...items[index], ...next, updatedAt: now };
+    await writeAll(items);
+    return items[index];
+  }
+  items.unshift(next);
+  await writeAll(items);
+  return next;
 }
 
 function nextSku(category: SellerCategory, items: InventoryItem[]): string {
@@ -207,6 +274,7 @@ export async function createInventoryItem(
     createdAt: now,
     updatedAt: now,
     source: 'seller',
+    storeId: input.storeId,
   };
   items.unshift(item);
   await writeAll(items);
@@ -239,6 +307,7 @@ export async function updateInventoryItem(
     imageUri: input.imageUri || existing.imageUri || productImageUrl(sku),
     updatedAt: new Date().toISOString(),
     source: existing.source || 'seller',
+    storeId: input.storeId || existing.storeId,
   };
   items[index] = updated;
   await writeAll(items);
@@ -265,6 +334,9 @@ export async function setItemStatus(
   } else {
     void syncSellerProductToApi(updated);
   }
+  void import('@/services/sellerSync').then(({ syncInventoryVisibilityToApi }) =>
+    syncInventoryVisibilityToApi(items),
+  );
   return updated;
 }
 

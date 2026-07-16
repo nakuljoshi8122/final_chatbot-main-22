@@ -1,0 +1,50 @@
+{
+  "store_glow_lab": {
+    "id": "store_glow_lab",
+    "name": "Glow Lab",
+    "owner_name": "Demo Owner",
+    "owner_email": "glow@example.com",
+    "owner_phone": "",
+    "category": "Skincare",
+    "description": "Serums, cleansers & daily care",
+    "address": "",
+    "created_at": "2026-07-16T12:05:41.961320+00:00",
+    "updated_at": "2026-07-16T12:05:41.961334+00:00"
+  },
+  "store_atelier_craft": {
+    "id": "store_atelier_craft",
+    "name": "Atelier Craft",
+    "owner_name": "Demo Owner",
+    "owner_email": "craft@example.com",
+    "owner_phone": "",
+    "category": "Handicrafts",
+    "description": "Handmade home & artisan goods",
+    "address": "",
+    "created_at": "2026-07-16T12:05:41.962189+00:00",
+    "updated_at": "2026-07-16T12:05:41.962194+00:00"
+  },
+  "store_thread_co": {
+    "id": "store_thread_co",
+    "name": "Thread & Co",
+    "owner_name": "Demo Owner",
+    "owner_email": "thread@example.com",
+    "owner_phone": "",
+    "category": "Apparel",
+    "description": "Everyday clothing & casual wear",
+    "address": "",
+    "created_at": "2026-07-16T12:05:41.962642+00:00",
+    "updated_at": "2026-07-16T12:05:41.962645+00:00"
+  },
+  "store_fadb4f0993": {
+    "id": "store_fadb4f0993",
+    "name": "Ghh",
+    "owner_name": "Vhnnnn",
+    "owner_email": "hhj",
+    "owner_phone": "55556666",
+    "category": "Skincare",
+    "description": "Bbhjnkhvc",
+    "address": "Hjjnbcx",
+    "created_at": "2026-07-16T12:26:36.827141+00:00",
+    "updated_at": "2026-07-16T12:26:36.827159+00:00"
+  }
+}

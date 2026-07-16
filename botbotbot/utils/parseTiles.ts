@@ -46,7 +46,7 @@ function normalizeFeatures(t: Record<string, unknown>): string[] {
   return fallback.slice(0, 2);
 }
 
-const API_BASE = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.9:8000').replace(/\/$/, '');
+const API_BASE = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.36:8000').replace(/\/$/, '');
 
 /** Point product-images at the Expo API host (agent may embed a stale LAN IP). */
 function rewriteProductImageHost(url: string): string {

@@ -26,6 +26,17 @@ def _public_base() -> str:
 def parse_kb_products(kb_path: Path = KB_PATH) -> list[dict[str, Any]]:
     """Return structured products from fake_kb.md plus live seller-listed items."""
     products: list[dict[str, Any]] = []
+    suppressed_titles: set[str] = set()
+    suppressed_skus: set[str] = set()
+    try:
+        try:
+            from .seller_catalog import chat_suppressed_keys
+        except ImportError:
+            from seller_catalog import chat_suppressed_keys
+        suppressed_titles, suppressed_skus = chat_suppressed_keys()
+    except Exception:
+        pass
+
     if kb_path.exists():
         text = kb_path.read_text(encoding="utf-8")
         parts = re.split(r"(?=^## )", text, flags=re.MULTILINE)
@@ -43,6 +54,17 @@ def parse_kb_products(kb_path: Path = KB_PATH) -> list[dict[str, Any]]:
             if not sku_m:
                 continue
             sku = sku_m.group(1).strip()
+            if name.lower() in suppressed_titles or sku.upper() in suppressed_skus:
+                continue
+            try:
+                try:
+                    from .store_scope import chunk_matches_store, get_current_store
+                except ImportError:
+                    from store_scope import chunk_matches_store, get_current_store
+                if get_current_store() and not chunk_matches_store(part):
+                    continue
+            except Exception:
+                pass
             desc = ""
             for line in part.splitlines()[1:]:
                 line = line.strip().lstrip("- ").strip()
@@ -70,6 +92,15 @@ def parse_kb_products(kb_path: Path = KB_PATH) -> list[dict[str, Any]]:
 
         by_sku = {p["sku"].upper(): i for i, p in enumerate(products)}
         for sp in seller_as_catalog_products(active_only=True):
+            try:
+                try:
+                    from .store_scope import product_matches_store, get_current_store
+                except ImportError:
+                    from store_scope import product_matches_store, get_current_store
+                if get_current_store() and not product_matches_store(sp):
+                    continue
+            except Exception:
+                pass
             key = sp["sku"].upper()
             if key in by_sku:
                 products[by_sku[key]] = sp

@@ -25,10 +25,12 @@ import {
 import {
   createInventoryItem,
   getInventoryItem,
+  hydrateInventoryFromApi,
   persistPickedImage,
   productImageUrl,
   updateInventoryItem,
 } from '@/services/inventoryStore';
+import { fetchSellerProduct } from '@/services/storesApi';
 
 function resolveParam(value: string | string[] | undefined): string {
   if (!value) return '';
@@ -48,15 +50,27 @@ function categoryHint(category: SellerCategory): string {
 
 export default function InventoryEditScreen() {
   const router = useRouter();
-  const { id: rawId } = useLocalSearchParams<{ id?: string }>();
+  const { id: rawId, category: rawCategory, storeId: rawStoreId } = useLocalSearchParams<{
+    id?: string;
+    category?: string;
+    storeId?: string;
+  }>();
   const editId = resolveParam(rawId);
   const isEdit = !!editId;
+  const presetCategory = resolveParam(rawCategory);
+  const storeId = resolveParam(rawStoreId);
 
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<SellerCategory>('Handicrafts');
+  const [category, setCategory] = useState<SellerCategory>(
+    presetCategory === 'Skincare' ||
+      presetCategory === 'Apparel' ||
+      presetCategory === 'Handicrafts'
+      ? presetCategory
+      : 'Handicrafts',
+  );
   const [price, setPrice] = useState('');
   const [sku, setSku] = useState('');
   const [description, setDescription] = useState('');
@@ -71,7 +85,14 @@ export default function InventoryEditScreen() {
     let cancelled = false;
     (async () => {
       try {
-        const item = await getInventoryItem(editId);
+        let item = await getInventoryItem(editId);
+        if (!item) {
+          // Chat-listed products live on the API first — hydrate into local store
+          const remote = await fetchSellerProduct(editId, storeId || undefined);
+          if (remote) {
+            item = await hydrateInventoryFromApi(remote);
+          }
+        }
         if (cancelled || !item) return;
         setName(item.name);
         setCategory(item.category);
@@ -90,7 +111,7 @@ export default function InventoryEditScreen() {
     return () => {
       cancelled = true;
     };
-  }, [editId]);
+  }, [editId, storeId]);
 
   const previewUri = useMemo(() => {
     if (imageUri) return imageUri;
@@ -203,8 +224,25 @@ export default function InventoryEditScreen() {
         quantity: qty,
         status,
         imageUri: customPhoto ? imageUri : previewUri,
+        storeId: storeId || undefined,
       };
       if (isEdit) {
+        // Ensure chat-created SKUs exist locally before update
+        const existing = await getInventoryItem(editId);
+        if (!existing) {
+          await hydrateInventoryFromApi({
+            sku: sku.trim() || editId,
+            name,
+            category,
+            price,
+            description,
+            category_notes: categoryNotes,
+            quantity: qty,
+            status,
+            img: customPhoto ? imageUri : previewUri,
+            store_id: storeId || undefined,
+          });
+        }
         await updateInventoryItem(editId, payload);
       } else {
         await createInventoryItem(payload);

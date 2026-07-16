@@ -2,10 +2,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import type { InventoryItem } from '@/services/inventoryStore';
 
-const API_BASE = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.9:8000').replace(
-  /\/$/,
-  '',
-);
+import { API_BASE, fetchWithTimeout } from '@/services/apiBase';
 
 async function imageToBase64(uri?: string): Promise<string | undefined> {
   if (!uri) return undefined;
@@ -36,6 +33,7 @@ export async function syncSellerProductToApi(
       category_notes: item.categoryNotes,
       quantity: item.quantity,
       status: item.status,
+      store_id: item.storeId || undefined,
       created_at: item.createdAt,
       updated_at: item.updatedAt,
       force_retag: !!opts?.forceRetag,
@@ -47,11 +45,15 @@ export async function syncSellerProductToApi(
       body.url = item.imageUri;
     }
 
-    const res = await fetch(`${API_BASE}/seller/products`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const res = await fetchWithTimeout(
+      `${API_BASE}/seller/products`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      20000,
+    );
     if (!res.ok) return false;
     const data = await res.json();
     return !!data?.ok;
@@ -62,9 +64,11 @@ export async function syncSellerProductToApi(
 
 export async function removeSellerProductFromApi(sku: string): Promise<void> {
   try {
-    await fetch(`${API_BASE}/seller/products/${encodeURIComponent(sku)}`, {
-      method: 'DELETE',
-    });
+    await fetchWithTimeout(
+      `${API_BASE}/seller/products/${encodeURIComponent(sku)}`,
+      { method: 'DELETE' },
+      5000,
+    );
   } catch {
     // non-blocking
   }
@@ -72,9 +76,40 @@ export async function removeSellerProductFromApi(sku: string): Promise<void> {
 
 export async function requestSellerRetag(): Promise<void> {
   try {
-    await fetch(`${API_BASE}/seller/products/retag?force=false`, { method: 'POST' });
+    await fetchWithTimeout(
+      `${API_BASE}/seller/products/retag?force=false`,
+      { method: 'POST' },
+      15000,
+    );
   } catch {
     // non-blocking
+  }
+}
+
+export async function syncInventoryVisibilityToApi(
+  items: InventoryItem[],
+): Promise<boolean> {
+  try {
+    const res = await fetchWithTimeout(
+      `${API_BASE}/shop/inventory-visibility`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: items.map((item) => ({
+            sku: item.sku,
+            name: item.name,
+            status: item.status,
+          })),
+        }),
+      },
+      8000,
+    );
+    if (!res.ok) return false;
+    const data = await res.json();
+    return !!data?.ok;
+  } catch {
+    return false;
   }
 }
 
@@ -87,6 +122,7 @@ export async function syncSellerItemsToApi(
   seedSkus: Set<string>,
 ): Promise<number> {
   let ok = 0;
+  await syncInventoryVisibilityToApi(items);
   for (const item of items) {
     const isSeed = seedSkus.has(item.sku);
     const isSeller = item.source === 'seller' || (!isSeed && item.source !== 'seed');

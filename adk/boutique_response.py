@@ -86,8 +86,12 @@ def _tiles_from_names(text: str, limit: int = 5) -> list[dict[str, Any]]:
     # Longest names first so "Aloe Vera Hydrating Moisturizer" beats "Aloe"
     products = sorted(parse_kb_products(), key=lambda p: len(p["name"]), reverse=True)
     for p in products:
-        name = p["name"].lower()
-        if name and name in lower:
+        name = p["name"].lower().strip()
+        if not name:
+            continue
+        # Word-ish boundary so "t-shirt" does not match inside "t-shirts" miss copy
+        # ("do not have t-shirts") and invent a tile for an out-of-stock reply.
+        if re.search(rf"(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])", lower):
             matched.append(enrich_product(p))
             if len(matched) >= limit:
                 break
@@ -127,14 +131,18 @@ def _filter_tiles_for_query(tiles: list[dict[str, Any]], user_query: str) -> lis
             "apparels",
             "clothing",
             "shirt",
+            "shirts",
             "tee",
+            "tees",
+            "tshirt",
+            "tshirts",
             "shorts",
             "short",
             "chino",
             "summer",
             "outfit",
         }
-    ) or want_men
+    ) or want_men or ("t-shirt" in q) or ("t-shirts" in q)
     want_jewellery = bool(
         tokens & {"jewellery", "jewelry", "earring", "earrings", "bracelet", "necklace", "ring"}
     )
@@ -177,7 +185,11 @@ def _filter_tiles_for_query(tiles: list[dict[str, Any]], user_query: str) -> lis
     return out or tiles
 
 
-def sanitize_boutique_response(response_text: str, user_query: str = "") -> str:
+def sanitize_boutique_response(
+    response_text: str,
+    user_query: str = "",
+    store: str | None = None,
+) -> str:
     """
     Ensure product recommendations render as app tiles:
     short intro + <TILES>[...]</TILES> with img + clickable url.
@@ -191,7 +203,47 @@ def sanitize_boutique_response(response_text: str, user_query: str = "") -> str:
     except Exception:
         pass
 
+    if store:
+        try:
+            try:
+                from .store_scope import set_current_store
+            except ImportError:
+                from store_scope import set_current_store
+            set_current_store(store)
+        except Exception:
+            pass
+
     text = response_text or ""
+    low_text = text.lower()
+    miss_reply = any(
+        p in low_text
+        for p in (
+            "couldn't find",
+            "could not find",
+            "noted your request",
+            "do not currently",
+            "don't currently",
+            "currently do not have",
+            "currently don't have",
+            "do not have",
+            "don't have",
+            "not have shirts",
+            "not have t-shirt",
+            "not in our catalog",
+            "not currently stock",
+            "not in stock",
+            "do not have that",
+            "don't have that",
+            "out of stock",
+            "owner to follow",
+            "owner will follow",
+        )
+    )
+    if miss_reply:
+        # Don't attach unrelated catalog cards when we already said we don't have it
+        prose = _clean_prose(text)
+        return prose or text.strip()
+
     existing = _tiles_from_existing_block(text)
     # Prefer TILES the model copied from search_kb; only fall back to name mining if empty
     if existing:
@@ -215,6 +267,15 @@ def sanitize_boutique_response(response_text: str, user_query: str = "") -> str:
         tiles = _unique_tiles(_tiles_from_names(user_query, limit=3))
 
     tiles = _filter_tiles_for_query(tiles, user_query)
+    try:
+        try:
+            from .store_scope import product_matches_store, get_current_store
+        except ImportError:
+            from store_scope import product_matches_store, get_current_store
+        if get_current_store():
+            tiles = [t for t in tiles if product_matches_store(t)]
+    except Exception:
+        pass
 
     prose = _clean_prose(text)
     looked_like_product_dump = bool(

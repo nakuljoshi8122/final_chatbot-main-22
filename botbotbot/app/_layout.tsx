@@ -6,6 +6,8 @@ import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { AppProvider } from '@/context/AppContext';
+import { StoreProvider } from '@/context/StoreContext';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -21,16 +23,26 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="product/[id]" options={{ headerShown: false }} />
-          <Stack.Screen name="inventory/index" options={{ headerShown: false }} />
-          <Stack.Screen name="inventory/edit" options={{ headerShown: false, presentation: 'modal' }} />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-        <StatusBar style="dark" />
-      </ThemeProvider>
+      <AppProvider>
+        <StoreProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <Stack>
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="seller" options={{ headerShown: false }} />
+              <Stack.Screen name="buyer" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="product/[id]" options={{ headerShown: false }} />
+              <Stack.Screen name="inventory/index" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="inventory/edit"
+                options={{ headerShown: false, presentation: 'modal' }}
+              />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+            <StatusBar style="dark" />
+          </ThemeProvider>
+        </StoreProvider>
+      </AppProvider>
     </SafeAreaProvider>
   );
 }

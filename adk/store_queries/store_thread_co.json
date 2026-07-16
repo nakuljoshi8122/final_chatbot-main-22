@@ -1,0 +1,35 @@
+[
+  {
+    "id": "q_b316bea37b",
+    "store_id": "store_thread_co",
+    "question": "tshirts",
+    "notes": "",
+    "session_id": "session_1784207107809_tb4bdk41g",
+    "status": "open",
+    "answer": "",
+    "created_at": "2026-07-16T13:05:29.834138+00:00",
+    "updated_at": "2026-07-16T13:05:29.834144+00:00"
+  },
+  {
+    "id": "q_b59271bb94",
+    "store_id": "store_thread_co",
+    "question": "shirts",
+    "notes": "",
+    "session_id": "session_1784207107809_tb4bdk41g",
+    "status": "open",
+    "answer": "",
+    "created_at": "2026-07-16T13:05:19.324047+00:00",
+    "updated_at": "2026-07-16T13:05:19.324056+00:00"
+  },
+  {
+    "id": "q_85d432ff3b",
+    "store_id": "store_thread_co",
+    "question": "beard care products",
+    "notes": "Looking for products suitable for beard care.",
+    "session_id": "session_1784205024740_wlu97d18o",
+    "status": "open",
+    "answer": "",
+    "created_at": "2026-07-16T12:31:02.197681+00:00",
+    "updated_at": "2026-07-16T12:31:02.197691+00:00"
+  }
+]

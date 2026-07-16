@@ -1,26 +1,31 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const SESSION_KEY = '@adidas_chat_session_id';
+function sessionKey(storeId?: string | null): string {
+  return storeId ? `@chat_session_${storeId}` : '@adidas_chat_session_id';
+}
 
-export async function loadStoredSessionId(): Promise<string | null> {
+export async function loadStoredSessionId(storeId?: string | null): Promise<string | null> {
   try {
-    return await AsyncStorage.getItem(SESSION_KEY);
+    return await AsyncStorage.getItem(sessionKey(storeId));
   } catch {
     return null;
   }
 }
 
-export async function saveStoredSessionId(sessionId: string): Promise<void> {
+export async function saveStoredSessionId(
+  sessionId: string,
+  storeId?: string | null,
+): Promise<void> {
   try {
-    await AsyncStorage.setItem(SESSION_KEY, sessionId);
+    await AsyncStorage.setItem(sessionKey(storeId), sessionId);
   } catch {
     // non-blocking
   }
 }
 
-export async function clearStoredSessionId(): Promise<void> {
+export async function clearStoredSessionId(storeId?: string | null): Promise<void> {
   try {
-    await AsyncStorage.removeItem(SESSION_KEY);
+    await AsyncStorage.removeItem(sessionKey(storeId));
   } catch {
     // non-blocking
   }

@@ -29,13 +29,19 @@ if AGENT_MODE == "adidas":
         else:
             from adidas_static_agent import runner, session_service
     APP_NAME = "adidas_marketplace_app"
+    SELLER_APP_NAME = APP_NAME
     SERVICE_LABEL = "adidas_marketplace_chatbot"
+    seller_runner = runner
+    seller_session_service = session_service
 else:
     try:
         from .static_agent import runner, session_service
+        from .seller_agent import seller_runner, seller_session_service
     except ImportError:
         from static_agent import runner, session_service
+        from seller_agent import seller_runner, seller_session_service
     APP_NAME = "enterprise_crm_app"
+    SELLER_APP_NAME = "seller_ops_app"
     SERVICE_LABEL = "enterprise_crm_assistant"
 
 try:
@@ -188,18 +194,70 @@ def _inject_active_product_context(session_id: str, query: str) -> str:
     return _inject_adidas_query_context(session_id, query, conversation_history)
 
 
-def _inject_crm_session_id(session_id: str, text: str) -> str:
-    """Append the live session_id so the LLM can pass it into contact tools."""
+def _inject_crm_session_id(
+    session_id: str,
+    text: str,
+    store: str | None = None,
+    *,
+    store_id: str | None = None,
+    role: str | None = None,
+    image_note: str | None = None,
+) -> str:
+    """Append session + store/role context for tool calls."""
     if not session_id:
         return text
+    store_line = ""
+    try:
+        try:
+            from .store_scope import normalize_store, store_meta
+            from .store_registry import get_store
+        except ImportError:
+            from store_scope import normalize_store, store_meta
+            from store_registry import get_store
+        shop = get_store(store_id) if store_id else None
+        key = normalize_store(store)
+        if not key and shop:
+            key = normalize_store(str(shop.get("category") or ""))
+        meta = store_meta(key) if key else None
+        if shop:
+            store_line = (
+                f" ROLE: `{role or 'buyer'}`. STORE_ID: `{shop['id']}`. "
+                f"Shop name: {shop.get('name')}. Category tag: {shop.get('category')}. "
+                f"Owner: {shop.get('owner_name')}."
+            )
+            if role == "seller":
+                store_line += (
+                    " You are the SELLER assistant for THIS shop only. "
+                    "Use inventory tools with this store_id. "
+                    "Ask follow-ups for missing listing fields."
+                )
+            else:
+                store_line += (
+                    " You are the BUYER assistant for THIS shop only. "
+                    "Only recommend products from this shop's catalog. "
+                    "If you cannot answer or the item is missing, you MUST call "
+                    f"log_shop_request with session_id and store_id=`{shop['id']}`. "
+                    "Never claim you noted a request unless that tool succeeded."
+                )
+        elif meta:
+            store_line = (
+                f" STORE TAG: `{key}` — ONLY the {meta['label']} category. "
+                f"Domains: {', '.join(sorted(meta['domains']))}."
+            )
+    except Exception:
+        pass
+    img_line = ""
+    if image_note:
+        img_line = f" {image_note}"
     note = (
         f"\n\nSYSTEM NOTE: The current user's session_id is `{session_id}`. "
         "Pass this exact value as the session_id argument to get_contact, "
-        "update_contact, create_followup, and escalate_to_human. "
-        "Never invent a session_id. Use search_kb for all product questions. "
-        "When recommending products, put ONLY a short sentence plus the exact "
+        "update_contact, create_followup, log_shop_request, and escalate_to_human. "
+        "Never invent a session_id. Use search_kb for product questions. "
+        "When recommending products to buyers, put ONLY a short sentence plus the exact "
         "<TILES>[...]</TILES> block from search_kb. Never use markdown images "
         "(![...](...)) or markdown links ([View Here](...))."
+        f"{store_line}{img_line}"
     )
     return f"{text.rstrip()}{note}"
 
@@ -262,6 +320,15 @@ async def lifespan(app: FastAPI):
         logger.info("CRM schema ready (contacts, interactions, deals, notes)")
     except Exception as e:
         logger.error(f"CRM schema init failed: {e}")
+    try:
+        try:
+            from .store_registry import seed_demo_stores_if_empty
+        except ImportError:
+            from store_registry import seed_demo_stores_if_empty
+        seeded = seed_demo_stores_if_empty()
+        logger.info("Store registry ready (%s stores)", len(seeded))
+    except Exception as e:
+        logger.error(f"Store registry init failed: {e}")
     yield
 
 
@@ -281,6 +348,7 @@ class SellerProductIn(BaseModel):
     category_notes: str = ""
     quantity: int = 0
     status: str = "active"
+    store_id: str | None = None
     image_base64: str | None = None
     image_url: str | None = None
     url: str | None = None
@@ -290,13 +358,24 @@ class SellerProductIn(BaseModel):
     tags: list[str] | None = None
 
 
+class StoreCreateIn(BaseModel):
+    name: str
+    owner_name: str
+    category: str = "Handicrafts"
+    owner_email: str = ""
+    owner_phone: str = ""
+    description: str = ""
+    address: str = ""
+    id: str | None = None
+
+
 @app.get("/seller/products")
-async def get_seller_products(active_only: bool = False):
+async def get_seller_products(active_only: bool = False, store_id: str | None = None):
     try:
         from .seller_catalog import list_seller_products
     except ImportError:
         from seller_catalog import list_seller_products
-    return {"products": list_seller_products(active_only=active_only)}
+    return {"products": list_seller_products(active_only=active_only, store_id=store_id)}
 
 
 @app.post("/seller/products")
@@ -332,6 +411,109 @@ async def remove_seller_product(sku: str):
     except ImportError:
         from seller_catalog import delete_seller_product
     return {"ok": delete_seller_product(sku), "sku": sku}
+
+
+@app.post("/shop/inventory-visibility")
+async def post_inventory_visibility(body: dict):
+    """Sync full inventory status from the app (seed + seller listings)."""
+    try:
+        from .seller_catalog import set_inventory_visibility
+    except ImportError:
+        from seller_catalog import set_inventory_visibility
+    items = body.get("items") if isinstance(body, dict) else None
+    if not isinstance(items, list):
+        return {"ok": False, "error": "items array required"}
+    return set_inventory_visibility(items)
+
+
+@app.get("/stores")
+async def get_stores(category: str | None = None):
+    try:
+        from .store_registry import list_stores, seed_demo_stores_if_empty
+    except ImportError:
+        from store_registry import list_stores, seed_demo_stores_if_empty
+    seed_demo_stores_if_empty()
+    return {"stores": list_stores(category=category)}
+
+
+@app.post("/stores")
+async def post_store(body: StoreCreateIn):
+    try:
+        from .store_registry import create_store
+    except ImportError:
+        from store_registry import create_store
+    try:
+        row = create_store(body.model_dump())
+        return {"ok": True, "store": row}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.get("/stores/{store_id}")
+async def get_store_endpoint(store_id: str):
+    try:
+        from .store_registry import get_store
+    except ImportError:
+        from store_registry import get_store
+    row = get_store(store_id)
+    if not row:
+        return {"error": "Store not found"}
+    return row
+
+
+@app.get("/stores/{store_id}/queries")
+async def get_store_queries(store_id: str, status: str = "open"):
+    try:
+        from .store_registry import list_store_queries
+    except ImportError:
+        from store_registry import list_store_queries
+    return {"queries": list_store_queries(store_id, status=status)}
+
+
+@app.post("/stores/{store_id}/queries/{query_id}/answer")
+async def post_store_query_answer(store_id: str, query_id: str, body: dict):
+    try:
+        from .store_registry import answer_store_query
+    except ImportError:
+        from store_registry import answer_store_query
+    answer = str((body or {}).get("answer") or "")
+    row = answer_store_query(store_id, query_id, answer)
+    if not row:
+        return {"ok": False, "error": "Query not found"}
+    return {"ok": True, "query": row}
+
+
+@app.get("/shop/requests")
+async def get_shop_requests(status: str = "open", limit: int = 50):
+    """List customer product requests (items we don't currently stock)."""
+    try:
+        from .crm_models import list_shop_requests
+    except ImportError:
+        from crm_models import list_shop_requests
+    rows = await list_shop_requests(status=status, limit=limit)
+    return {
+        "requests": [
+            {
+                "id": r.id,
+                "session_id": r.session_id,
+                "item_query": r.item_query,
+                "notes": r.notes,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@app.post("/shop/requests/{request_id}/fulfill")
+async def fulfill_shop_request_endpoint(request_id: int):
+    try:
+        from .crm_models import fulfill_shop_request
+    except ImportError:
+        from crm_models import fulfill_shop_request
+    ok = await fulfill_shop_request(request_id)
+    return {"ok": ok, "id": request_id}
 
 
 @app.get("/products/{product_id}")
@@ -399,6 +581,10 @@ async def stt_only(audio_file: UploadFile = File(...)):
 class UserQuery(BaseModel):
     query: str
     session_id: str = None
+    store: str | None = None  # category tag: skincare | handicrafts | apparels
+    store_id: str | None = None  # specific shop id
+    role: str | None = None  # buyer | seller
+    image_base64: str | None = None  # optional chat image upload
 
 class VoiceQuery(BaseModel):
     session_id: str = None
@@ -455,6 +641,26 @@ async def ask(query: UserQuery, background_tasks: BackgroundTasks):
         user_id = session_id  # device/session identity for ADK (POC)
         logger.info(f"🆔 [ASK] Using session_id/user_id: {session_id}")
         hydrate_session_state(session_id)
+
+        try:
+            try:
+                from .store_scope import set_request_scope
+            except ImportError:
+                from store_scope import set_request_scope
+            set_request_scope(
+                store=query.store,
+                store_id=query.store_id,
+                role=query.role,
+                session_id=session_id,
+            )
+            logger.info(
+                "🏪 [ASK] Scope store=%s store_id=%s role=%s",
+                query.store,
+                query.store_id,
+                query.role,
+            )
+        except Exception as e:
+            logger.warning(f"Store scope not set: {e}")
 
         # CRM writes run after the response so they never share ADK's OTEL context
         background_tasks.add_task(_crm_log_inbound, session_id, query.query)
@@ -585,23 +791,64 @@ async def ask(query: UserQuery, background_tasks: BackgroundTasks):
         else:
             contextual_query = _inject_active_product_context(session_id, query.query)
         if AGENT_MODE != "adidas":
-            contextual_query = _inject_crm_session_id(session_id, contextual_query)
+            image_note = None
+            if query.image_base64 and query.role == "seller":
+                try:
+                    try:
+                        from .chat_image_stash import save_pending_chat_image
+                    except ImportError:
+                        from chat_image_stash import save_pending_chat_image
+                    saved = save_pending_chat_image(session_id, query.image_base64)
+                    if saved:
+                        image_note = (
+                            "A product photo was uploaded with this message and saved as a "
+                            "pending chat image. When calling upsert_inventory_item, set "
+                            "use_pending_chat_image='true' and pass session_id from this SYSTEM NOTE. "
+                            "Do NOT paste or invent image_base64."
+                        )
+                    else:
+                        image_note = (
+                            "Seller tried to upload a photo but it could not be saved. "
+                            "Ask them to retry with another image or use the List form."
+                        )
+                except Exception as e:
+                    logger.warning("Pending chat image save failed: %s", e)
+                    image_note = (
+                        "Photo upload failed on the server. Ask the seller to retry."
+                    )
+            contextual_query = _inject_crm_session_id(
+                session_id,
+                contextual_query,
+                query.store,
+                store_id=query.store_id,
+                role=query.role,
+                image_note=image_note,
+            )
 
         logger.info(f"💬 [ASK] History turns loaded for session: {session_id}")
         logger.info(f"🤖 [ASK] Sending contextual query to agent: {contextual_query[:100]}...")
         
+        # Seller vs buyer agent
+        active_runner = runner
+        active_sessions = session_service
+        active_app = APP_NAME
+        if AGENT_MODE != "adidas" and (query.role or "").lower() == "seller":
+            active_runner = seller_runner
+            active_sessions = seller_session_service
+            active_app = SELLER_APP_NAME
+
         user_message = types.Content(role='user', parts=[types.Part(text=contextual_query)])
         
         # Create session if it doesn't exist, ignore if it already exists
         try:
-            await session_service.create_session(user_id=user_id, session_id=session_id, app_name=APP_NAME)
+            await active_sessions.create_session(user_id=user_id, session_id=session_id, app_name=active_app)
         except Exception:
             # Session might already exist, that's okay
             pass
         
         response_text = ""
         logger.info("🔄 [ASK] Starting agent processing...")
-        async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=user_message):
+        async for event in active_runner.run_async(user_id=user_id, session_id=session_id, new_message=user_message):
             if event.is_final_response() and event.content and event.content.parts:
                 response_text = event.content.parts[0].text
                 logger.info(f"✅ [ASK] Agent response: '{response_text}'")
@@ -619,13 +866,59 @@ async def ask(query: UserQuery, background_tasks: BackgroundTasks):
                 response_text, query.query, session_id, conversation_history
             )
             update_session_from_response(session_id, response_text)
+        elif (query.role or "").lower() == "seller":
+            # Seller ops replies are plain text (no buyer TILES)
+            tile_meta = {}
         else:
             try:
                 from .boutique_response import sanitize_boutique_response
             except ImportError:
                 from boutique_response import sanitize_boutique_response
-            response_text = sanitize_boutique_response(response_text, query.query)
+            response_text = sanitize_boutique_response(
+                response_text, query.query, store=query.store
+            )
             tile_meta = {}
+
+            # Safety net: if buyer asked something missing / "noted", persist query —
+            # but never when the reply already includes product tiles (agent lied / stuttered).
+            if (query.role or "").lower() == "buyer" and query.store_id:
+                try:
+                    try:
+                        from .store_registry import add_store_query
+                    except ImportError:
+                        from store_registry import add_store_query
+                    low = (response_text or "").lower()
+                    has_tiles = "<tiles>" in low
+                    noted = (not has_tiles) and any(
+                        p in low
+                        for p in (
+                            "noted your request",
+                            "don't currently",
+                            "do not currently",
+                            "currently do not have",
+                            "currently don't have",
+                            "couldn't find",
+                            "could not find",
+                            "not in our catalog",
+                            "not in stock",
+                            "don't have that",
+                            "do not have that",
+                            "do not have",
+                            "don't have",
+                            "owner will follow",
+                            "owner to consider",
+                            "owner to follow",
+                        )
+                    )
+                    if noted:
+                        add_store_query(
+                            str(query.store_id),
+                            query.query,
+                            session_id=session_id,
+                            notes="auto: buyer ask safety net",
+                        )
+                except Exception as e:
+                    logger.warning("Buyer query auto-log failed: %s", e)
         
         # Store conversation in our simple history
         add_to_conversation(session_id, "user", query.query)
@@ -675,7 +968,8 @@ async def ask_voice(
     background_tasks: BackgroundTasks,
     audio_file: UploadFile = File(...),
     session_id: Optional[str] = Form(None),
-    return_audio: bool = Form(False)
+    return_audio: bool = Form(False),
+    store: Optional[str] = Form(None),
 ):
     """
     Handle voice input and optionally return audio response.
@@ -684,8 +978,18 @@ async def ask_voice(
         audio_file: Audio file (WAV, MP3, etc.)
         session_id: Optional session ID for conversation continuity
         return_audio: If True, returns audio response; if False, returns text
+        store: Optional store tag (skincare | handicrafts | apparels)
     """
     try:
+        try:
+            try:
+                from .store_scope import set_request_scope
+            except ImportError:
+                from store_scope import set_request_scope
+            set_request_scope(store=store, role="buyer")
+        except Exception:
+            pass
+
         # Read the audio file
         audio_content = await audio_file.read()
         
@@ -889,7 +1193,7 @@ async def ask_voice(
             else:
                 contextual_query = _inject_active_product_context(session_id, transcribed_text)
             if AGENT_MODE != "adidas":
-                contextual_query = _inject_crm_session_id(session_id, contextual_query)
+                contextual_query = _inject_crm_session_id(session_id, contextual_query, store)
 
             logger.info(f"💬 [VOICE] History turns loaded for session: {session_id}")
             logger.info(f"🎤 [VOICE] Sending contextual query to agent: {contextual_query[:100]}...")
@@ -925,7 +1229,7 @@ async def ask_voice(
                     from .boutique_response import sanitize_boutique_response
                 except ImportError:
                     from boutique_response import sanitize_boutique_response
-                response_text = sanitize_boutique_response(response_text, transcribed_text)
+                response_text = sanitize_boutique_response(response_text, transcribed_text, store=store)
                 tile_meta = {}
             
             # Generate audio response using OpenAI TTS

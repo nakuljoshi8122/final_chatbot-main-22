@@ -109,6 +109,21 @@ class Note(Base):
     contact: Mapped[Contact] = relationship("Contact", back_populates="notes")
 
 
+class ShopRequest(Base):
+    """Customer asked for a product we do not currently stock."""
+
+    __tablename__ = "shop_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    item_query: Mapped[str] = mapped_column(String(512), nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+
 _engine = create_async_engine(_require_database_url(), pool_pre_ping=True)
 AsyncSessionLocal = async_sessionmaker(bind=_engine, expire_on_commit=False, class_=AsyncSession)
 
@@ -187,3 +202,49 @@ async def log_crm_turn(session_id: str, inbound: str, outbound: str) -> None:
         await log_interaction(session_id, "inbound", inbound)
     if outbound:
         await log_interaction(session_id, "outbound", outbound)
+
+
+async def log_shop_request(
+    session_id: str,
+    item_query: str,
+    notes: str = "",
+) -> ShopRequest:
+    """Record a customer product request (out of stock / not in catalog)."""
+    if not session_id or not item_query:
+        raise ValueError("session_id and item_query are required")
+    await get_or_create_contact(session_id)
+    row = ShopRequest(
+        session_id=session_id.strip(),
+        item_query=str(item_query).strip()[:512],
+        notes=(notes or "").strip() or None,
+        status="open",
+        created_at=_utcnow(),
+    )
+    async with AsyncSessionLocal() as db:
+        db.add(row)
+        await db.commit()
+        await db.refresh(row)
+    return row
+
+
+async def list_shop_requests(
+    status: str = "open",
+    limit: int = 50,
+) -> list[ShopRequest]:
+    async with AsyncSessionLocal() as db:
+        q = select(ShopRequest).order_by(ShopRequest.created_at.desc()).limit(limit)
+        if status and status != "all":
+            q = q.where(ShopRequest.status == status)
+        result = await db.execute(q)
+        return list(result.scalars().all())
+
+
+async def fulfill_shop_request(request_id: int) -> bool:
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(ShopRequest).where(ShopRequest.id == request_id))
+        row = result.scalar_one_or_none()
+        if row is None:
+            return False
+        row.status = "fulfilled"
+        await db.commit()
+        return True

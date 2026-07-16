@@ -177,7 +177,7 @@ export default function ProductDetailScreen() {
           </View>
         )}
 
-        <TouchableOpacity style={styles.chatButton} onPress={() => router.push('/(tabs)')}>
+        <TouchableOpacity style={styles.chatButton} onPress={() => router.push('/(tabs)/chat')}>
           <Ionicons name="chatbubbles" size={20} color="#fff" />
           <Text style={styles.chatButtonText}>Ask consultant about this item</Text>
         </TouchableOpacity>

@@ -32,6 +32,8 @@ import PseudoDuplexVoiceScreen from './PseudoDuplexVoiceScreen';
 import { ProductTileGrid } from './ProductTileCard';
 import { ChatTableList } from './ChatTableView';
 import { pushSellerListingsToChat } from '@/services/inventoryStore';
+import { useStore } from '@/context/StoreContext';
+import { useRouter } from 'expo-router';
 
 interface ChatInterfaceProps {
   initialSessionId?: string;
@@ -41,6 +43,11 @@ const FONT = 'Inter_400Regular';
 const FONT_BOLD = 'Inter_700Bold';
 
 export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) {
+  const router = useRouter();
+  const { store, clearStore } = useStore();
+  const storeId = store?.id ?? null;
+  const storeTag = store?.agentTag ?? undefined;
+  const brandLabel = store?.label || 'Store';
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -70,6 +77,10 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
   } = useVoiceRecording();
 
   useEffect(() => {
+    apiService.setStoreTag(storeTag || null);
+  }, [storeTag]);
+
+  useEffect(() => {
     apiService.checkHealth().then((health) => {
       if (health.status === 'unreachable') {
         setApiNotice('Backend unreachable. Start the API server.');
@@ -83,8 +94,10 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
     let cancelled = false;
 
     const restoreSession = async () => {
-      const storedId = initialSessionId || (await loadStoredSessionId());
-      const activeId = storedId || sessionId;
+      setSessionReady(false);
+      setMessages([]);
+      const storedId = initialSessionId || (await loadStoredSessionId(storeId));
+      const activeId = storedId || apiService.generateSessionId();
       setSessionId(activeId);
 
       const history = await apiService.getSessionHistory(activeId);
@@ -115,7 +128,7 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
         setMessages(restored);
       }
 
-      await saveStoredSessionId(activeId);
+      await saveStoredSessionId(activeId, storeId);
       setSessionReady(true);
       void pushSellerListingsToChat();
     };
@@ -124,13 +137,13 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [storeId, initialSessionId]);
 
   useEffect(() => {
     if (sessionId) {
-      saveStoredSessionId(sessionId);
+      saveStoredSessionId(sessionId, storeId);
     }
-  }, [sessionId]);
+  }, [sessionId, storeId]);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -173,8 +186,8 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
         style: 'destructive',
         onPress: async () => {
           const newId = apiService.generateSessionId();
-          await clearStoredSessionId();
-          await saveStoredSessionId(newId);
+          await clearStoredSessionId(storeId);
+          await saveStoredSessionId(newId, storeId);
           setSessionId(newId);
           setMessages([]);
           setInputText('');
@@ -239,7 +252,7 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
     setIsLoading(true);
 
     try {
-      const response = await apiService.sendMessage(query.trim(), sessionId);
+      const response = await apiService.sendMessage(query.trim(), sessionId, storeTag);
       setMessages((prev) => [...prev, buildBotMessage(response)]);
       setSessionId(response.session_id);
     } catch (error) {
@@ -286,7 +299,7 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
     setIsLoading(true);
 
     try {
-      const response = await apiService.sendVoiceMessage(audioUri, sessionId, true);
+      const response = await apiService.sendVoiceMessage(audioUri, sessionId, true, storeTag);
       let botAudioUri: string | undefined;
       if (response.audio_response) {
         try {
@@ -402,7 +415,16 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <View style={[styles.topBar, { paddingTop: headerPaddingTop }]}>
-        <Text style={styles.logo}>adidas</Text>
+        <TouchableOpacity
+          onPress={async () => {
+            await clearStore();
+            router.replace('/');
+          }}
+          hitSlop={8}
+          accessibilityLabel="Switch store"
+        >
+          <Text style={styles.logo}>{brandLabel}</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           onPress={startNewChat}
           style={styles.newChatBtn}

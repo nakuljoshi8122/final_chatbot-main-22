@@ -18,6 +18,7 @@ try:
         Contact,
         Note,
         get_or_create_contact,
+        log_shop_request as _log_shop_request,
         _utcnow,
     )
 except ImportError:
@@ -26,6 +27,7 @@ except ImportError:
         Contact,
         Note,
         get_or_create_contact,
+        log_shop_request as _log_shop_request,
         _utcnow,
     )
 
@@ -76,11 +78,24 @@ _JEWELLERY_MARKERS = frozenset(
     "jewellery jewelry earring earrings bracelet necklace pendant ring jhumka accessory".split()
 )
 _APPAREL_MARKERS = frozenset(
-    "apparel clothing shirt tee t-shirt chino pant pants short shorts hoodie jacket dress skirt linen denim".split()
+    "apparel clothing shirt shirts tee tees tshirt tshirts t-shirt t-shirts chino pant pants "
+    "short shorts hoodie jacket dress skirt linen denim".split()
 )
 _SKINCARE_MARKERS = frozenset(
     "skincare serum moisturizer moisturiser cleanser toner spf beauty brightening".split()
 )
+
+# Normalize query tokens so shirts/tshirts match "T-shirt" in catalog
+_TOKEN_ALIASES: dict[str, list[str]] = {
+    "shirts": ["shirt", "tee", "tshirt", "t-shirt"],
+    "shirt": ["shirt", "tee", "tshirt", "t-shirt"],
+    "tshirts": ["tshirt", "t-shirt", "tee", "shirt"],
+    "tshirt": ["tshirt", "t-shirt", "tee", "shirt"],
+    "tees": ["tee", "tshirt", "t-shirt", "shirt"],
+    "tee": ["tee", "tshirt", "t-shirt", "shirt"],
+    "pants": ["pant", "chino"],
+    "shorts": ["short", "shorts"],
+}
 
 
 def _contains_marker(text: str, markers: frozenset[str] | set[str]) -> bool:
@@ -95,25 +110,51 @@ def _contains_marker(text: str, markers: frozenset[str] | set[str]) -> bool:
     return False
 
 
+def _normalize_query_tokens(query: str) -> set[str]:
+    raw = {
+        t for t in re.findall(r"[a-z0-9]+", query.lower()) if t not in _STOPWORDS and len(t) > 1
+    }
+    out: set[str] = set()
+    for t in raw:
+        out.add(t)
+        # simple plural strip
+        if t.endswith("ses") and len(t) > 4:
+            out.add(t[:-2])
+        elif t.endswith("s") and len(t) > 3:
+            out.add(t[:-1])
+        for alias in _TOKEN_ALIASES.get(t, []):
+            out.add(alias)
+            out.update(alias.replace("-", "").split())
+        # tshirt / t-shirt forms
+        if t in ("tshirt", "tshirts") or t.startswith("tshirt"):
+            out.update({"tee", "shirt", "t-shirt", "tshirt"})
+    return {x for x in out if x and x not in _STOPWORDS}
+
+
 def _expand_query(query: str) -> str:
     q = query.lower().strip()
     extras: list[str] = []
-    tokens = re.findall(r"[a-z0-9]+", q)
+    tokens = _normalize_query_tokens(q)
     for key, vals in _QUERY_EXPANSIONS.items():
         if key in q or key in tokens:
             extras.extend(vals)
+    # apparel synonyms from aliases
+    for t in list(tokens):
+        extras.extend(_TOKEN_ALIASES.get(t, []))
     seen = set()
     out = []
-    for w in tokens + extras:
-        if w not in seen and w not in _STOPWORDS:
-            seen.add(w)
-            out.append(w)
+    for w in list(tokens) + extras:
+        w = w.lower().strip()
+        if not w or w in seen or w in _STOPWORDS:
+            continue
+        seen.add(w)
+        out.append(w)
     return " ".join(out) if out else query
 
 
 def _detect_intent(query: str) -> dict[str, bool]:
     q = query.lower()
-    tokens = set(re.findall(r"[a-z0-9]+", q))
+    tokens = _normalize_query_tokens(q)
     return {
         "jewellery": bool(tokens & _JEWELLERY_MARKERS) or "jewel" in q,
         "apparel": bool(tokens & _APPAREL_MARKERS)
@@ -171,7 +212,15 @@ def _load_kb_chunks(*, mode: str = "auto") -> list[str]:
             from seller_catalog import seller_kb_chunks, list_seller_products
 
         if list_seller_products(active_only=True):
-            seller_chunks = seller_kb_chunks(active_only=True)
+            try:
+                try:
+                    from .store_scope import get_current_store_id
+                except ImportError:
+                    from store_scope import get_current_store_id
+                sid = get_current_store_id()
+            except Exception:
+                sid = None
+            seller_chunks = seller_kb_chunks(active_only=True, store_id=sid)
     except Exception:
         pass
 
@@ -187,37 +236,108 @@ def _load_kb_chunks(*, mode: str = "auto") -> list[str]:
     if mode == "seed":
         return seed_chunks
 
-    # auto: seed (Pinterest catalog) + seller uploads; seller wins on same title
+    # auto: seed (Pinterest catalog) + active seller uploads only
+    try:
+        try:
+            from .seller_catalog import chat_suppressed_keys
+        except ImportError:
+            from seller_catalog import chat_suppressed_keys
+        suppressed_titles, suppressed_skus = chat_suppressed_keys()
+    except Exception:
+        suppressed_titles, suppressed_skus = set(), set()
+
+    try:
+        try:
+            from .store_scope import chunk_matches_shop, get_current_store, get_current_store_id
+        except ImportError:
+            from store_scope import chunk_matches_shop, get_current_store, get_current_store_id
+        store = get_current_store()
+        store_id = get_current_store_id()
+    except Exception:
+        store = None
+        store_id = None
+
+        def chunk_matches_shop(chunk: str) -> bool:  # type: ignore
+            return True
+
+    def _chunk_visible(chunk: str) -> bool:
+        if not chunk.startswith("##"):
+            return True
+        if not chunk_matches_shop(chunk):
+            return False
+        title = chunk.splitlines()[0].lstrip("# ").strip().lower()
+        if title in suppressed_titles:
+            return False
+        sku_m = re.search(r"SKU:\s*([A-Z0-9\-]+)", chunk, re.I)
+        if sku_m and sku_m.group(1).upper() in suppressed_skus:
+            return False
+        return True
+
+    # Non-demo shop with store_id: seller products only (no seed catalog)
+    try:
+        from .store_scope import DEMO_STORE_CATEGORY
+    except ImportError:
+        try:
+            from store_scope import DEMO_STORE_CATEGORY
+        except ImportError:
+            DEMO_STORE_CATEGORY = {}
+
+    seller_chunks = [c for c in seller_chunks if chunk_matches_shop(c)]
     seller_titles = {
         c.splitlines()[0].lstrip("# ").strip().lower()
         for c in seller_chunks
         if c.startswith("##")
     }
-    merged = [
-        c
-        for c in seed_chunks
-        if c.splitlines()[0].lstrip("# ").strip().lower() not in seller_titles
-    ]
+
+    use_seed = True
+    if store_id and store_id not in DEMO_STORE_CATEGORY:
+        use_seed = False
+    # Seller role managing their shop: still allow seed for demo only
+
+    merged: list[str] = []
+    if use_seed:
+        merged = [
+            c
+            for c in seed_chunks
+            if _chunk_visible(c)
+            and c.splitlines()[0].lstrip("# ").strip().lower() not in seller_titles
+        ]
     merged.extend(seller_chunks)
     return merged
 
 
 def _score_chunk(query: str, chunk: str, intent: Optional[dict] = None) -> int:
     q_raw = query.lower().strip()
-    q_tokens = {
-        t for t in re.findall(r"[a-z0-9]+", q_raw) if t not in _STOPWORDS and len(t) > 2
-    }
+    q_tokens = _normalize_query_tokens(q_raw)
     if not q_tokens and len(q_raw) < 3:
         return 0
     c_lower = chunk.lower()
-    score = sum(1 for t in q_tokens if re.search(rf"\b{re.escape(t)}\b", c_lower) or (len(t) > 4 and t in c_lower))
+    c_compact = re.sub(r"[^a-z0-9]+", "", c_lower)
+    score = 0
+    for t in q_tokens:
+        if len(t) <= 2:
+            continue
+        if re.search(rf"\b{re.escape(t)}\b", c_lower):
+            score += 1
+        elif "-" in t and t.replace("-", "") in c_compact:
+            score += 2
+        elif len(t) > 3 and t in c_compact:
+            score += 1
     title = chunk.splitlines()[0].lstrip("# ").strip().lower() if chunk.startswith("##") else ""
+    title_compact = re.sub(r"[^a-z0-9]+", "", title)
     if q_raw and (q_raw in title or q_raw in c_lower):
         score += 5
     if title and (title in q_raw or q_raw == title):
         score += 8
+    # shirts / tshirts ↔ t-shirt / tee
+    for t in q_tokens:
+        if t in ("shirt", "shirts", "tee", "tshirt", "t-shirt") and (
+            "shirt" in title_compact or "tee" in title_compact or "tshirt" in title_compact
+        ):
+            score += 10
+            break
     if score > 0 and "seller_listed" in c_lower:
-        score += 2
+        score += 3  # prefer live shop listings
 
     intent = intent or {}
     domain = _chunk_domain(chunk)
@@ -227,7 +347,6 @@ def _score_chunk(query: str, chunk: str, intent: Optional[dict] = None) -> int:
     if intent.get("jewellery") and not intent.get("apparel"):
         if domain in ("apparel", "skincare"):
             return 0
-        # Must actually look like jewellery (not random handicrafts / 'fringed')
         if domain != "jewellery" and not _contains_marker(c_lower, _JEWELLERY_MARKERS):
             return 0
         if domain == "jewellery" or _contains_marker(title, _JEWELLERY_MARKERS):
@@ -239,9 +358,10 @@ def _score_chunk(query: str, chunk: str, intent: Optional[dict] = None) -> int:
             return 0
         if domain == "apparel":
             score += 4
-        # Prefer exact garment when asked (shorts, shirt, tee)
-        for garment in ("short", "shorts", "shirt", "tee", "chino", "hoodie", "jacket"):
-            if garment in q_tokens and garment in c_lower:
+        for garment in ("short", "shorts", "shirt", "tee", "tshirt", "t-shirt", "chino", "hoodie", "jacket"):
+            if garment in q_tokens and (
+                garment in c_lower or garment.replace("-", "") in c_compact
+            ):
                 score += 8
     if intent.get("skincare") and not intent.get("apparel"):
         if domain == "jewellery":
@@ -282,30 +402,101 @@ async def search_kb(query: str) -> str:
         return "Error: query is required to search the knowledge base."
 
     query = str(query).strip()
-    intent = _detect_intent(query)
-    search_query = _expand_query(query)
+
+    # 1) Understand intent (category / product type / audience) BEFORE search
+    try:
+        try:
+            from .query_understand import (
+                understand_query,
+                build_search_wrapper,
+                intent_to_score_flags,
+                format_intent_header,
+                score_boost_for_intent,
+            )
+        except ImportError:
+            from query_understand import (
+                understand_query,
+                build_search_wrapper,
+                intent_to_score_flags,
+                format_intent_header,
+                score_boost_for_intent,
+            )
+        q_intent = await understand_query(query)
+        search_query = build_search_wrapper(q_intent)
+        intent = intent_to_score_flags(q_intent)
+        # Merge legacy token intent so older markers still help
+        legacy = _detect_intent(q_intent.corrected or query)
+        for k, v in legacy.items():
+            intent[k] = bool(intent.get(k) or v)
+        intent_header = format_intent_header(q_intent)
+    except Exception as exc:
+        q_intent = None
+        intent = _detect_intent(query)
+        search_query = _expand_query(query)
+        intent_header = f"[QUERY INTENT | fallback=legacy | err={exc}]"
+        score_boost_for_intent = None  # type: ignore
+
     chunks = _load_kb_chunks(mode="auto")
     if not chunks:
         return "Error: knowledge base is empty."
 
+    def _rank_score(c: str) -> int:
+        base = _score_chunk(search_query, c, intent)
+        if q_intent is not None and score_boost_for_intent is not None:
+            boost = score_boost_for_intent(c, q_intent)
+            if boost <= -100:
+                return 0
+            base += boost
+        return base
+
     ranked = sorted(
-        ((_score_chunk(search_query, c, intent), c) for c in chunks),
+        ((_rank_score(c), c) for c in chunks),
         key=lambda x: x[0],
         reverse=True,
     )
-    hits = [c for score, c in ranked if score > 0][:5]
+    # Require a real match — score 1 is often a weak token overlap
+    hits = [c for score, c in ranked if score >= 2][:5]
 
     if not hits:
-        # Fallback: return all product titles so the model can ask which one
-        titles = [c.splitlines()[0].lstrip("# ").strip() for c in chunks]
+        titles = [c.splitlines()[0].lstrip("# ").strip() for c in chunks if c.startswith("##")]
+        # Auto-record for buyer shop queries so seller inbox never depends on the LLM
+        try:
+            try:
+                from .store_scope import get_current_role, resolve_store_id, get_current_session_id
+                from .store_registry import add_store_query
+            except ImportError:
+                from store_scope import get_current_role, resolve_store_id, get_current_session_id
+                from store_registry import add_store_query
+            if (get_current_role() or "") == "buyer":
+                sid = resolve_store_id()
+                sess = get_current_session_id() or ""
+                if sid:
+                    add_store_query(
+                        sid,
+                        query,
+                        session_id=sess,
+                        notes="auto: no catalog match from search_kb",
+                    )
+        except Exception:
+            pass
         return (
-            "No strong KB match for that query. Available products: "
+            f"{intent_header}\n\n"
+            "No strong KB match for that query. We do not currently stock this item. "
+            "You MUST call log_shop_request with the customer's requested item name "
+            "(and store_id from the SYSTEM NOTE) so the store owner can see it. "
+            "Tell the customer you've noted their request and the owner will follow up. "
+            "Do NOT show unrelated product TILES. "
+            "Available products: "
             + ", ".join(titles[:40])
             + ("…" if len(titles) > 40 else "")
-            + ". Ask the customer which product they mean, then search again."
+            + "."
         )
 
-    body = "KNOWLEDGE BASE RESULTS:\n\n" + "\n\n---\n\n".join(hits)
+    body = (
+        f"{intent_header}\n\n"
+        "KNOWLEDGE BASE RESULTS (matched after intent wrapper):\n\n"
+        + "\n\n---\n\n".join(hits)
+    )
 
     # Attach IMAGE + TILES metadata (from Pinterest fetch manifest) when available
     try:
@@ -458,6 +649,69 @@ async def create_followup(session_id: str, note: str) -> str:
         await db.commit()
 
     return f"Follow-up note saved for owner (session_id={session_id})."
+
+
+async def log_shop_request(
+    session_id: str,
+    item_query: str,
+    notes: str = "",
+    store_id: str = "",
+) -> str:
+    """Log a customer product request / unanswered question for the shop owner.
+
+    You MUST call this when search_kb finds no match and the customer wants to
+    buy something, or when you cannot answer a question from the catalog.
+    The store owner sees open requests in their seller Queries inbox.
+
+    Args:
+        session_id: Exact session_id from the SYSTEM NOTE.
+        item_query: What the customer asked for (e.g. "sunscreen SPF 50").
+        notes: Optional context (skin type, budget, urgency).
+        store_id: Exact STORE_ID from the SYSTEM NOTE (required for seller inbox).
+
+    Returns:
+        Confirmation that the request was saved for the store owner.
+    """
+    if not session_id or not str(session_id).strip():
+        return "Error: session_id is required."
+    if not item_query or not str(item_query).strip():
+        return "Error: item_query is required."
+
+    session_id = str(session_id).strip()
+    item_query = str(item_query).strip()
+    notes = str(notes or "").strip()
+
+    messages = []
+    try:
+        try:
+            from .store_scope import resolve_store_id
+            from .store_registry import add_store_query
+        except ImportError:
+            from store_scope import resolve_store_id
+            from store_registry import add_store_query
+        sid = resolve_store_id(store_id, session_id)
+        if not sid:
+            return (
+                "Error: store_id missing. Pass STORE_ID from the SYSTEM NOTE "
+                "so the seller can see this query."
+            )
+        entry = add_store_query(sid, item_query, session_id=session_id, notes=notes)
+        messages.append(f"Saved to store query inbox as {entry['id']} (store={sid}).")
+    except Exception as e:
+        messages.append(f"(file inbox note: {e})")
+
+    try:
+        row = await _log_shop_request(session_id, item_query, notes)
+        messages.append(f"CRM request #{row.id} saved.")
+    except Exception as e:
+        if not any("Saved to store query" in m for m in messages):
+            return f"Error saving shop request: {e}"
+        messages.append(f"(CRM note: {e})")
+
+    return (
+        " ".join(messages)
+        + f" Noted for owner: '{item_query}'. Tell the customer the owner will follow up."
+    )
 
 
 async def escalate_to_human(session_id: str, reason: str) -> str:

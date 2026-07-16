@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 ADK_DIR = Path(__file__).resolve().parent
 SELLER_JSON = ADK_DIR / "seller_products.json"
+VISIBILITY_JSON = ADK_DIR / "inventory_visibility.json"
 PRODUCT_IMAGES_DIR = ADK_DIR / "static" / "products"
 
 
@@ -40,11 +41,107 @@ def _save(data: dict[str, dict[str, Any]]) -> None:
     SELLER_JSON.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def list_seller_products(active_only: bool = False) -> list[dict[str, Any]]:
+def _load_visibility() -> dict[str, dict[str, Any]]:
+    if not VISIBILITY_JSON.exists():
+        return {}
+    try:
+        data = json.loads(VISIBILITY_JSON.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_visibility(data: dict[str, dict[str, Any]]) -> None:
+    VISIBILITY_JSON.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+
+
+def set_inventory_visibility(items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Authoritative Active/Draft/Archive/Trash map from the seller inventory app."""
+    data: dict[str, dict[str, Any]] = {}
+    for raw in items:
+        sku = str(raw.get("sku") or "").strip().upper()
+        if not sku:
+            continue
+        name = str(raw.get("name") or "").strip()
+        status = str(raw.get("status") or "active").strip().lower()
+        data[sku] = {
+            "sku": sku,
+            "name": name,
+            "status": status,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    _save_visibility(data)
+    return {"ok": True, "count": len(data)}
+
+
+def inventory_status_for_sku(sku: str, fallback: str = "active") -> str:
+    key = str(sku or "").strip().upper()
+    if not key:
+        return fallback
+    row = _load_visibility().get(key)
+    if row:
+        return str(row.get("status") or fallback).lower()
+    return fallback
+
+
+def list_seller_products(
+    active_only: bool = False,
+    store_id: Optional[str] = None,
+) -> list[dict[str, Any]]:
     rows = list(_load().values())
+    if store_id:
+        sid = str(store_id).strip()
+        rows = [r for r in rows if str(r.get("store_id") or "").strip() == sid]
     if active_only:
-        rows = [r for r in rows if str(r.get("status") or "active").lower() == "active"]
+        rows = [
+            r
+            for r in rows
+            if inventory_status_for_sku(
+                str(r.get("sku") or ""),
+                str(r.get("status") or "active").lower(),
+            )
+            == "active"
+        ]
     return sorted(rows, key=lambda r: str(r.get("updated_at") or ""), reverse=True)
+
+
+def chat_suppressed_keys() -> tuple[set[str], set[str]]:
+    """Titles + SKUs hidden from customer chat (draft / archive / trash listings)."""
+    titles: set[str] = set()
+    skus: set[str] = set()
+
+    for sku, row in _load_visibility().items():
+        status = str(row.get("status") or "active").lower()
+        if status == "active":
+            continue
+        name = str(row.get("name") or "").strip().lower()
+        if name:
+            titles.add(name)
+        if sku:
+            skus.add(str(sku).upper())
+
+    vis_skus = set(_load_visibility().keys())
+    for row in list(_load().values()):
+        sku = str(row.get("sku") or "").strip().upper()
+        if sku in vis_skus:
+            continue
+        status = str(row.get("status") or "active").lower()
+        if status == "active":
+            continue
+        name = str(row.get("name") or "").strip().lower()
+        if name:
+            titles.add(name)
+        if sku:
+            skus.add(sku)
+    return titles, skus
+
+
+def is_chat_visible(row: dict[str, Any]) -> bool:
+    sku = str(row.get("sku") or "").strip().upper()
+    fallback = str(row.get("status") or "active").lower()
+    return inventory_status_for_sku(sku, fallback) == "active"
 
 
 def get_seller_product(sku: str) -> Optional[dict[str, Any]]:
@@ -85,6 +182,7 @@ def upsert_seller_product(payload: dict[str, Any], *, tag: bool = True, force_re
     url = payload.get("url") or existing.get("url") or img or f"{base}/product-images/{sku}.jpg"
 
     now = datetime.now(timezone.utc).isoformat()
+    store_id = str(payload.get("store_id") or existing.get("store_id") or "").strip()
     row = {
         "sku": sku,
         "name": name,
@@ -97,6 +195,7 @@ def upsert_seller_product(payload: dict[str, Any], *, tag: bool = True, force_re
         "img": img,
         "url": url,
         "source": "seller",
+        "store_id": store_id,
         "tags": list(existing.get("tags") or []),
         "updated_at": now,
         "created_at": existing.get("created_at") or payload.get("created_at") or now,
@@ -191,6 +290,8 @@ def seller_to_kb_chunk(row: dict[str, Any]) -> str:
         f"## {row.get('name')}",
         f"- Category: {row.get('category')} | SKU: {row.get('sku')} | Price: {row.get('price') or 'n/a'}",
     ]
+    if row.get("store_id"):
+        lines.append(f"- Store_id: {row['store_id']}")
     if row.get("description"):
         lines.append(f"- Specs: {row['description']}")
     if row.get("category_notes"):
@@ -207,18 +308,25 @@ def seller_to_kb_chunk(row: dict[str, Any]) -> str:
     qty = row.get("quantity")
     if qty is not None:
         lines.append(f"- Stock: {qty} units")
+    lines.append(f"- Status: {row.get('status') or 'active'}")
     lines.append("- Source: seller_listed (live inventory)")
     return "\n".join(lines)
 
 
-def seller_kb_chunks(active_only: bool = True) -> list[str]:
-    return [seller_to_kb_chunk(r) for r in list_seller_products(active_only=active_only)]
+def seller_kb_chunks(active_only: bool = True, store_id: Optional[str] = None) -> list[str]:
+    return [
+        seller_to_kb_chunk(r)
+        for r in list_seller_products(active_only=active_only, store_id=store_id)
+    ]
 
 
-def seller_as_catalog_products(active_only: bool = True) -> list[dict[str, Any]]:
+def seller_as_catalog_products(
+    active_only: bool = True,
+    store_id: Optional[str] = None,
+) -> list[dict[str, Any]]:
     """Shape compatible with boutique_catalog.parse_kb_products()."""
     out: list[dict[str, Any]] = []
-    for r in list_seller_products(active_only=active_only):
+    for r in list_seller_products(active_only=active_only, store_id=store_id):
         out.append(
             {
                 "id": r["sku"],
@@ -234,6 +342,7 @@ def seller_as_catalog_products(active_only: bool = True) -> list[dict[str, Any]]
                 "domain": r.get("domain") or "",
                 "audience": r.get("audience") or "",
                 "product_type": r.get("product_type") or "",
+                "store_id": r.get("store_id") or "",
                 "source": "seller",
             }
         )

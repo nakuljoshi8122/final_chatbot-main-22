@@ -62,9 +62,14 @@ export interface SessionHistoryResponse {
 
 class ApiService {
   private baseURL: string;
+  private _storeTag: string | null = null;
 
   constructor(baseURL?: string) {
-    this.baseURL = baseURL || process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.155:8000';
+    this.baseURL = baseURL || process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.36:8000';
+  }
+
+  setStoreTag(store: string | null) {
+    this._storeTag = store;
   }
 
   async checkHealth(): Promise<HealthResponse> {
@@ -99,16 +104,38 @@ class ApiService {
     }
   }
 
-  async sendMessage(query: string, sessionId?: string): Promise<ChatResponse & { tiles: TileProduct[]; tables: ChatTable[]; displayText: string }> {
+  async sendMessage(
+    query: string,
+    sessionId?: string,
+    opts?: {
+      store?: string;
+      storeId?: string;
+      role?: string;
+      imageBase64?: string;
+    } | string,
+  ): Promise<ChatResponse & { tiles: TileProduct[]; tables: ChatTable[]; displayText: string }> {
     try {
+      // Back-compat: third arg used to be store string
+      const options =
+        typeof opts === 'string' ? { store: opts } : opts || {};
+
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Request timeout')), 60000);
       });
 
+      const body: Record<string, unknown> = {
+        query,
+        session_id: sessionId,
+      };
+      if (options.store) body.store = options.store;
+      if (options.storeId) body.store_id = options.storeId;
+      if (options.role) body.role = options.role;
+      if (options.imageBase64) body.image_base64 = options.imageBase64;
+
       const fetchPromise = fetch(`${this.baseURL}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, session_id: sessionId }),
+        body: JSON.stringify(body),
       });
 
       const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
@@ -140,7 +167,12 @@ class ApiService {
     }
   }
 
-  async sendVoiceMessage(audioUri: string, sessionId?: string, returnAudio: boolean = false): Promise<ChatResponse & { tiles: TileProduct[]; tables: ChatTable[]; displayText: string }> {
+  async sendVoiceMessage(
+    audioUri: string,
+    sessionId?: string,
+    returnAudio: boolean = false,
+    store?: string,
+  ): Promise<ChatResponse & { tiles: TileProduct[]; tables: ChatTable[]; displayText: string }> {
     try {
       if (!audioUri || audioUri === 'null' || audioUri === 'undefined') {
         throw new Error('Invalid audio URI provided');
@@ -160,6 +192,8 @@ class ApiService {
 
       if (sessionId) formData.append('session_id', sessionId);
       formData.append('return_audio', returnAudio.toString());
+      const storeTag = store || this._storeTag;
+      if (storeTag) formData.append('store', storeTag);
 
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Request timeout')), 30000);

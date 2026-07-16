@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SellerTheme, InventoryStatus } from '@/constants/SellerTheme';
+import { useStore } from '@/context/StoreContext';
 import {
   InventoryItem,
   loadInventory,
@@ -38,6 +39,7 @@ function rowSubtext(item: InventoryItem): string {
 
 export default function InventoryScreen() {
   const router = useRouter();
+  const { store } = useStore();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<InventoryStatus>('active');
@@ -68,6 +70,7 @@ export default function InventoryScreen() {
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((item) => {
+      if (store && item.category !== store.category) return false;
       if (item.status !== filter) return false;
       if (!q) return true;
       return (
@@ -76,10 +79,13 @@ export default function InventoryScreen() {
         item.category.toLowerCase().includes(q)
       );
     });
-  }, [items, filter, search]);
+  }, [items, filter, search, store]);
 
   const openAdd = () => {
-    router.push('/inventory/edit');
+    router.push({
+      pathname: '/inventory/edit',
+      params: store ? { category: store.category } : {},
+    });
   };
 
   const openEdit = (item: InventoryItem) => {

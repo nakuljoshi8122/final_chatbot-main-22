@@ -1,0 +1,14 @@
+{
+  "HC-DESK-BM01": {
+    "sku": "HC-DESK-BM01",
+    "name": "Bamboo Desk Organizer",
+    "status": "draft",
+    "updated_at": "2026-07-16T08:30:29.162827+00:00"
+  },
+  "HC-VASE-TP10": {
+    "sku": "HC-VASE-TP10",
+    "name": "Hand-Painted Terracotta Vase",
+    "status": "draft",
+    "updated_at": "2026-07-16T08:30:29.163396+00:00"
+  }
+}
