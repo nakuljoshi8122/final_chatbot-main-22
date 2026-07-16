@@ -1,5 +1,49 @@
 [
   {
+    "id": "q_abfbf05b4e",
+    "store_id": "store_thread_co",
+    "question": "I want skin care too",
+    "notes": "auto: buyer ask safety net",
+    "session_id": "session_1784208230124_zjde5ekhq",
+    "status": "open",
+    "answer": "",
+    "created_at": "2026-07-16T13:24:52.374554+00:00",
+    "updated_at": "2026-07-16T13:24:52.374562+00:00"
+  },
+  {
+    "id": "q_889d96284e",
+    "store_id": "store_thread_co",
+    "question": "skin care",
+    "notes": "",
+    "session_id": "session_1784208230124_zjde5ekhq",
+    "status": "open",
+    "answer": "",
+    "created_at": "2026-07-16T13:24:50.954250+00:00",
+    "updated_at": "2026-07-16T13:24:50.954259+00:00"
+  },
+  {
+    "id": "q_7fa3810a06",
+    "store_id": "store_thread_co",
+    "question": "Do y have any pant shirt combo",
+    "notes": "auto: buyer ask safety net",
+    "session_id": "session_1784205207142_poh5l0tgd",
+    "status": "open",
+    "answer": "",
+    "created_at": "2026-07-16T13:23:44.714691+00:00",
+    "updated_at": "2026-07-16T13:23:44.714713+00:00"
+  },
+  {
+    "id": "q_e9c6714362",
+    "store_id": "store_thread_co",
+    "question": "pant shirt combo",
+    "notes": "Looking for a combination of pants and shirts.",
+    "session_id": "session_1784205207142_poh5l0tgd",
+    "status": "open",
+    "answer": "",
+    "created_at": "2026-07-16T13:23:41.770564+00:00",
+    "updated_at": "2026-07-16T13:23:41.770578+00:00"
+  },
+  {
     "id": "q_b316bea37b",
     "store_id": "store_thread_co",
     "question": "tshirts",
