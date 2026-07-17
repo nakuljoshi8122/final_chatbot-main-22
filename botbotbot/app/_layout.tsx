@@ -5,9 +5,9 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
-import { AppProvider } from '@/context/AppContext';
-import { StoreProvider } from '@/context/StoreContext';
+import { useColorScheme } from '@/shared/hooks/useColorScheme';
+import { AppProvider } from '@/contexts/AppContext';
+import { StoreProvider } from '@/features/legacy-store/context/StoreContext';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();

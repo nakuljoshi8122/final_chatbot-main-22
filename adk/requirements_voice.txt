@@ -1,3 +1,0 @@
-# Additional requirements for voice functionality
-openai>=1.0.0
-python-multipart>=0.0.6

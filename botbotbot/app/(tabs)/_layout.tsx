@@ -3,12 +3,12 @@ import React from 'react';
 import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HapticTab } from '@/components/HapticTab';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import TabBarBackground from '@/components/ui/TabBarBackground';
-import { Colors } from '@/constants/Colors';
-import { Brand } from '@/constants/Brand';
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { HapticTab } from '@/shared/ui/HapticTab';
+import { IconSymbol } from '@/shared/ui/IconSymbol';
+import TabBarBackground from '@/shared/ui/TabBarBackground';
+import { Colors } from '@/shared/theme/Colors';
+import { Brand } from '@/shared/theme/Brand';
+import { useColorScheme } from '@/shared/hooks/useColorScheme';
 
 const TAB_BAR_CONTENT_HEIGHT = 56;
 

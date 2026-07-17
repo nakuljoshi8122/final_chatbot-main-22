@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Adidas Store",
-    "slug": "adidas-store",
+    "name": "ShopAssist POC",
+    "slug": "shopassist-poc",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "This app needs microphone access for voice messages with your Adidas Sales Consultant.",
+        "NSMicrophoneUsageDescription": "This app needs microphone access for voice messages with your store assistant.",
         "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to attach product photos from your library when listing items.",
         "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to take product photos when listing items."
       },
