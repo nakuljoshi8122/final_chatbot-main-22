@@ -221,8 +221,14 @@ def product_to_tile(product: dict, tag: str = "") -> dict:
     colors = product.get("colors", [])
     features = card.get("features", [])[:2]
     slug = _slugify(product["name"])
+    img = get_product_image(product)
+    images = product.get("images") if isinstance(product.get("images"), list) else []
+    images = [str(u) for u in images if str(u or "").strip()]
+    if img and img not in images:
+        images = [img, *images]
     tile = {
         "id": product["id"],
+        "sku": product.get("sku") or product["id"],
         "name": product["name"],
         "price": product["price"],
         "category": card["category"],
@@ -231,7 +237,11 @@ def product_to_tile(product: dict, tag: str = "") -> dict:
         "tag": tag or None,
         "color": colors[0] if colors else "",
         "url": f"https://shopassist.local/{slug}",
-        "img": get_product_image(product),
+        "img": img,
+        "images": images or ([img] if img else []),
+        "quantity": product.get("quantity"),
+        "status": product.get("status") or "active",
+        "store_id": product.get("store_id") or "",
     }
     if tag:
         tile["tag"] = tag

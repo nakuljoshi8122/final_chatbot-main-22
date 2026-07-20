@@ -238,25 +238,26 @@ export default function SellerTileDetailModal({
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.handle} />
 
+          <View style={styles.imageWrap}>
+            <ProductImageGallery images={gallery} height={200} borderRadius={16} />
+            <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+              <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                {statusStyle.label}
+              </Text>
+            </View>
+            {hasPromo ? (
+              <View style={[styles.statusBadge, styles.promoBadge]}>
+                <Text style={styles.promoBadgeText}>10% off</Text>
+              </View>
+            ) : null}
+          </View>
+
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
           >
-            <View style={styles.imageWrap}>
-              <ProductImageGallery images={gallery} height={200} borderRadius={16} />
-              <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-                <Text style={[styles.statusText, { color: statusStyle.text }]}>
-                  {statusStyle.label}
-                </Text>
-              </View>
-              {hasPromo ? (
-                <View style={[styles.statusBadge, styles.promoBadge]}>
-                  <Text style={styles.promoBadgeText}>10% off</Text>
-                </View>
-              ) : null}
-            </View>
-
             <View style={styles.headRow}>
               <Text style={styles.name}>{name}</Text>
               {loading || busy ? <ActivityIndicator size="small" color="#888" /> : null}

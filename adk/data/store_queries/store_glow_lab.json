@@ -5,9 +5,9 @@
     "question": "Do you have sunscreen SPF 50?",
     "notes": "",
     "session_id": "",
-    "status": "open",
-    "answer": "",
+    "status": "answered",
+    "answer": "I'll restock soon",
     "created_at": "2026-07-16T12:15:29.320712+00:00",
-    "updated_at": "2026-07-16T12:15:29.320877+00:00"
+    "updated_at": "2026-07-20T06:08:38.836446+00:00"
   }
 ]

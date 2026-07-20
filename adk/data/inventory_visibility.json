@@ -128,8 +128,8 @@
   "HC-DESK-BM01": {
     "sku": "HC-DESK-BM01",
     "name": "Bamboo Desk Organizer",
-    "status": "draft",
-    "updated_at": "2026-07-19T21:25:57.486019+00:00"
+    "status": "trash",
+    "updated_at": "2026-07-20T06:12:25.758050+00:00"
   },
   "HC-COAS-WD4": {
     "sku": "HC-COAS-WD4",
@@ -164,8 +164,8 @@
   "HC-BOT-CU950": {
     "sku": "HC-BOT-CU950",
     "name": "Copper Water Bottle 950ml",
-    "status": "draft",
-    "updated_at": "2026-07-19T21:25:57.486046+00:00"
+    "status": "trash",
+    "updated_at": "2026-07-20T06:12:25.755772+00:00"
   },
   "HC-PLAN-TT6": {
     "sku": "HC-PLAN-TT6",
@@ -454,5 +454,11 @@
     "name": "White Button-Up Shirt",
     "status": "active",
     "updated_at": "2026-07-20T05:20:51.087058+00:00"
+  },
+  "AP-NEW-TBPVT": {
+    "sku": "AP-NEW-TBPVT",
+    "name": "Denim Jeans (Blue)",
+    "status": "active",
+    "updated_at": "2026-07-20T05:57:25.021754+00:00"
   }
 }

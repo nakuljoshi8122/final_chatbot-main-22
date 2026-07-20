@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { Brand } from '@/shared/theme/Brand';
 import { useCart } from '@/contexts/CartContext';
 import { notifySubscribeApi } from '@/services/cartApi';
 import ProductImageGallery from '@/shared/ui/ProductImageGallery';
+import { fetchSellerProduct } from '@/services/storesApi';
 
 export type ShelfProduct = {
   sku: string;
@@ -40,22 +41,57 @@ export default function BuyerTileDetailModal({ product, visible, onClose }: Prop
   const router = useRouter();
   const { add, buyNow, refresh } = useCart();
   const [busy, setBusy] = useState<null | 'buy' | 'cart' | 'notify'>(null);
+  const [fresh, setFresh] = useState<ShelfProduct | null>(null);
+
+  useEffect(() => {
+    if (!visible || !product?.sku) {
+      setFresh(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const remote = await fetchSellerProduct(product.sku, product.store_id);
+      if (cancelled || !remote) return;
+      const images = Array.isArray(remote.images)
+        ? remote.images.map(String).filter(Boolean)
+        : [];
+      if (remote.img && !images.includes(remote.img)) images.unshift(remote.img);
+      setFresh({
+        sku: remote.sku,
+        name: remote.name || product.name,
+        price: remote.price || product.price,
+        img: remote.img || product.img,
+        images: images.length ? images : product.images,
+        url: remote.url || product.url,
+        category: remote.category || product.category,
+        description: remote.description || product.description,
+        quantity:
+          typeof remote.quantity === 'number' ? remote.quantity : product.quantity,
+        status: remote.status || product.status,
+        store_id: remote.store_id || product.store_id,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, product?.sku, product?.store_id]);
 
   if (!product) return null;
 
-  const soldOut = (product.quantity ?? 0) <= 0;
+  const p = fresh || product;
+  const soldOut = (p.quantity ?? 0) <= 0;
   const gallery = (() => {
-    const list = (product.images || []).map(String).filter(Boolean);
-    if (product.img && !list.includes(product.img)) list.unshift(product.img);
+    const list = (p.images || []).map(String).filter(Boolean);
+    if (p.img && !list.includes(p.img)) list.unshift(p.img);
     return list;
   })();
 
   const handleAddToCart = async () => {
     setBusy('cart');
-    const res = await add(product.sku, product.store_id, 1);
+    const res = await add(p.sku, p.store_id, 1);
     setBusy(null);
     if (res.ok) {
-      Alert.alert('Added to cart', `${product.name} was added to your cart.`);
+      Alert.alert('Added to cart', `${p.name} was added to your cart.`);
       onClose();
     } else if (res.error === 'sold_out') {
       Alert.alert('Sold out', 'This item just went out of stock.');
@@ -66,11 +102,11 @@ export default function BuyerTileDetailModal({ product, visible, onClose }: Prop
 
   const handleBuyNow = async () => {
     setBusy('buy');
-    const res = await buyNow(product.sku, product.store_id, 1);
+    const res = await buyNow(p.sku, p.store_id, 1);
     setBusy(null);
     if (res.ok) {
       await refresh();
-      Alert.alert('Order placed', `Your order for ${product.name} is confirmed.`);
+      Alert.alert('Order placed', `Your order for ${p.name} is confirmed.`);
       onClose();
     } else if (res.error === 'sold_out') {
       Alert.alert('Sold out', 'This item just went out of stock.');
@@ -81,7 +117,7 @@ export default function BuyerTileDetailModal({ product, visible, onClose }: Prop
 
   const handleNotify = async () => {
     setBusy('notify');
-    await notifySubscribeApi(product.sku, product.store_id);
+    await notifySubscribeApi(p.sku, p.store_id);
     setBusy(null);
     Alert.alert('Got it!', 'You will be notified when this item is available again.');
     onClose();
@@ -92,11 +128,11 @@ export default function BuyerTileDetailModal({ product, visible, onClose }: Prop
     router.push({
       pathname: '/product/[id]',
       params: {
-        id: product.sku,
-        name: product.name,
-        price: product.price || '',
-        category: product.category || '',
-        description: product.description || '',
+        id: p.sku,
+        name: p.name,
+        price: p.price || '',
+        category: p.category || '',
+        description: p.description || '',
         features: JSON.stringify([]),
         icon: 'pricetag',
       },
@@ -111,36 +147,39 @@ export default function BuyerTileDetailModal({ product, visible, onClose }: Prop
             <Ionicons name="close" size={22} color="#111" />
           </Pressable>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <View style={styles.imageWrap}>
-              <ProductImageGallery images={gallery} height={220} borderRadius={14} />
-              {soldOut ? (
-                <View style={styles.soldOutBadge}>
-                  <Text style={styles.soldOutBadgeText}>SOLD OUT</Text>
-                </View>
-              ) : null}
-            </View>
+          <View style={styles.imageWrap}>
+            <ProductImageGallery images={gallery} height={220} borderRadius={14} />
+            {soldOut ? (
+              <View style={styles.soldOutBadge}>
+                <Text style={styles.soldOutBadgeText}>SOLD OUT</Text>
+              </View>
+            ) : null}
+          </View>
 
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={styles.body}>
-              <Text style={styles.name}>{product.name}</Text>
-              {product.price ? <Text style={styles.price}>{product.price}</Text> : null}
+              <Text style={styles.name}>{p.name}</Text>
+              {p.price ? <Text style={styles.price}>{p.price}</Text> : null}
 
               <View style={styles.metaRow}>
-                {product.category ? (
+                {p.category ? (
                   <View style={styles.chip}>
-                    <Text style={styles.chipText}>{product.category}</Text>
+                    <Text style={styles.chipText}>{p.category}</Text>
                   </View>
                 ) : null}
-                {!soldOut ? (
+                {!soldOut && typeof p.quantity === 'number' ? (
                   <View style={styles.chip}>
-                    <Text style={styles.chipText}>{product.quantity} in stock</Text>
+                    <Text style={styles.chipText}>{p.quantity} in stock</Text>
                   </View>
                 ) : null}
               </View>
 
-              {product.description ? (
-                <Text style={styles.desc}>{product.description}</Text>
-              ) : null}
+              {p.description ? <Text style={styles.desc}>{p.description}</Text> : null}
 
               {soldOut ? (
                 <Pressable
@@ -222,57 +261,67 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    zIndex: 10,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 16,
-    padding: 4,
+    zIndex: 5,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  imageWrap: { width: '100%', height: 240, backgroundColor: Brand.colors.background },
-  image: { width: '100%', height: 240 },
-  imageFallback: { alignItems: 'center', justifyContent: 'center' },
+  imageWrap: {
+    width: '100%',
+    position: 'relative',
+  },
   soldOutBadge: {
     position: 'absolute',
-    top: 14,
-    left: 14,
+    left: 12,
+    bottom: 12,
     backgroundColor: '#B00020',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 6,
+    borderRadius: 8,
   },
-  soldOutBadgeText: { color: '#fff', fontWeight: '800', fontSize: 12, letterSpacing: 1 },
-  body: { padding: 18, gap: 10 },
+  soldOutBadgeText: { color: '#fff', fontWeight: '800', fontSize: 11 },
+  body: { padding: 16, gap: 10, paddingBottom: 22 },
   name: { fontSize: 20, fontWeight: '800', color: '#111' },
-  price: { fontSize: 18, fontWeight: '700', color: '#111' },
+  price: { fontSize: 18, fontWeight: '800', color: Brand.colors.brandBlue },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
-    backgroundColor: '#F1F1F1',
-    borderRadius: 20,
+    backgroundColor: '#F2F2F2',
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
+    borderRadius: 999,
   },
-  chipText: { fontSize: 12, color: '#444', fontWeight: '600' },
-  desc: { fontSize: 14, color: '#555', lineHeight: 20, marginTop: 2 },
+  chipText: { fontSize: 12, fontWeight: '600', color: '#555' },
+  desc: { fontSize: 14, lineHeight: 20, color: '#444' },
   btn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    height: 48,
     borderRadius: 12,
-    marginTop: 6,
+    paddingVertical: 13,
   },
-  buyBtn: { backgroundColor: '#111' },
-  cartBtn: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#111' },
-  notifyBtn: { backgroundColor: '#B00020' },
-  btnTextLight: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  btnTextDark: { color: '#111', fontWeight: '700', fontSize: 15 },
+  buyBtn: { backgroundColor: '#1D3557' },
+  cartBtn: {
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#111',
+  },
+  notifyBtn: { backgroundColor: '#6B4F2A' },
+  btnTextLight: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  btnTextDark: { color: '#111', fontWeight: '800', fontSize: 15 },
   viewLink: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginTop: 10,
-    paddingVertical: 4,
+    paddingVertical: 8,
   },
-  viewLinkText: { color: Brand.colors.brandBlue, fontWeight: '600', fontSize: 14 },
+  viewLinkText: {
+    color: Brand.colors.brandBlue,
+    fontWeight: '700',
+    fontSize: 13,
+  },
 });

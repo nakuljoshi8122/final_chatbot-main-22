@@ -20,6 +20,10 @@ import {
 } from '@/shared/utils/chatSession';
 import { parseAgentResponse } from '@/shared/utils/parseTiles';
 import { ProductTileGrid } from '@/features/chat-shared/components/ProductTileCard';
+import BuyerTileDetailModal, {
+  ShelfProduct,
+} from '@/features/buyer/components/BuyerTileDetailModal';
+import { TileProduct } from '@/shared/utils/parseTiles';
 import { useApp } from '@/contexts/AppContext';
 import { useCart } from '@/contexts/CartContext';
 import { ThemedText } from '@/shared/ui/ThemedText';
@@ -53,8 +57,30 @@ export default function BuyerShopChatScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState(apiService.generateSessionId());
   const [sessionReady, setSessionReady] = useState(false);
+  const [selectedTile, setSelectedTile] = useState<ShelfProduct | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const sessionKey = `buyer_${storeId}`;
+
+  const openTile = (t: TileProduct) => {
+    const sku = String(t.sku || t.id || '').replace(/^tile-/, '');
+    const images = (t.images || []).map(String).filter(Boolean);
+    if (t.img && !images.includes(t.img)) images.unshift(t.img);
+    setSelectedTile({
+      sku,
+      name: t.name,
+      price: t.price,
+      img: t.img,
+      images,
+      url: t.url,
+      category: t.category,
+      description: t.description,
+      quantity: typeof t.quantity === 'number' ? t.quantity : undefined,
+      status: t.status,
+      store_id: String(storeId),
+    });
+    setModalOpen(true);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -220,7 +246,10 @@ export default function BuyerShopChatScreen() {
                 <Text style={[styles.text, m.isUser && { color: '#fff' }]}>{m.text}</Text>
               </View>
               {!m.isUser && m.tiles?.length ? (
-                <ProductTileGrid tiles={m.tiles} />
+                <ProductTileGrid
+                  tiles={m.tiles}
+                  onTilePressOverride={openTile}
+                />
               ) : null}
             </View>
           ))}
@@ -260,6 +289,15 @@ export default function BuyerShopChatScreen() {
           <View style={{ height: keyboardHeight }} />
         ) : null}
       </View>
+
+      <BuyerTileDetailModal
+        product={selectedTile}
+        visible={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setSelectedTile(null);
+        }}
+      />
     </SafeAreaView>
   );
 }

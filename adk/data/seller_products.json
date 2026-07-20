@@ -527,9 +527,12 @@
     "description": "3 compartments; 25x12x10 cm; unfinished bamboo",
     "category_notes": "",
     "quantity": 10,
-    "status": "active",
-    "img": "http://192.168.1.13:8000/product-images/HC-DESK-BM01.jpg",
-    "url": "http://192.168.1.13:8000/product-images/HC-DESK-BM01.jpg",
+    "status": "trash",
+    "img": "http://192.168.1.17:8000/product-images/HC-DESK-BM01.jpg",
+    "images": [
+      "http://192.168.1.17:8000/product-images/HC-DESK-BM01.jpg"
+    ],
+    "url": "http://192.168.1.17:8000/product-images/HC-DESK-BM01.jpg",
     "source": "seed",
     "store_id": "store_atelier_craft",
     "tags": [
@@ -541,11 +544,8 @@
       "organizer",
       "unfinished"
     ],
-    "updated_at": "2026-07-19T21:24:28.020647+00:00",
-    "created_at": "2026-07-19T21:24:14.529546+00:00",
-    "domain": "handicrafts",
-    "audience": "all",
-    "product_type": "bamboo desk organizer"
+    "updated_at": "2026-07-20T06:12:25.757214+00:00",
+    "created_at": "2026-07-19T21:24:14.529546+00:00"
   },
   "HC-BOT-CU950": {
     "sku": "HC-BOT-CU950",
@@ -555,9 +555,12 @@
     "description": "Pure copper; 950 ml; leak-resistant lid",
     "category_notes": "",
     "quantity": 10,
-    "status": "active",
-    "img": "http://192.168.1.13:8000/product-images/HC-BOT-CU950.jpg",
-    "url": "http://192.168.1.13:8000/product-images/HC-BOT-CU950.jpg",
+    "status": "trash",
+    "img": "http://192.168.1.17:8000/product-images/HC-BOT-CU950.jpg",
+    "images": [
+      "http://192.168.1.17:8000/product-images/HC-BOT-CU950.jpg"
+    ],
+    "url": "http://192.168.1.17:8000/product-images/HC-BOT-CU950.jpg",
     "source": "seed",
     "store_id": "store_atelier_craft",
     "tags": [
@@ -572,11 +575,8 @@
       "resistant",
       "water"
     ],
-    "updated_at": "2026-07-19T21:24:28.073669+00:00",
-    "created_at": "2026-07-19T21:24:14.532423+00:00",
-    "domain": "handicrafts",
-    "audience": "all",
-    "product_type": "copper water bottle 950ml"
+    "updated_at": "2026-07-20T06:12:25.754363+00:00",
+    "created_at": "2026-07-19T21:24:14.532423+00:00"
   },
   "SK-BHA-TN100": {
     "sku": "SK-BHA-TN100",
@@ -712,5 +712,40 @@
     "domain": "apparel",
     "audience": "men",
     "product_type": "shirt"
+  },
+  "AP-NEW-TBPVT": {
+    "sku": "AP-NEW-TBPVT",
+    "name": "Denim Jeans (Blue)",
+    "category": "Apparel",
+    "price": "$35",
+    "description": "Classic denim jeans in a versatile blue color, perfect for casual wear. Comfortable fit for everyday use.",
+    "category_notes": "",
+    "quantity": 20,
+    "status": "active",
+    "img": "http://192.168.1.17:8000/product-images/AP-NEW-TBPVT.jpg",
+    "images": [
+      "http://192.168.1.17:8000/product-images/AP-NEW-TBPVT.jpg",
+      "http://192.168.1.17:8000/product-images/AP-NEW-TBPVT_1.jpg"
+    ],
+    "url": "http://192.168.1.17:8000/product-images/AP-NEW-TBPVT.jpg",
+    "source": "seller",
+    "store_id": "store_thread_co",
+    "tags": [
+      "apparel",
+      "blue",
+      "casual",
+      "classic",
+      "comfortable",
+      "denim",
+      "everyday",
+      "jeans",
+      "unisex",
+      "versatile"
+    ],
+    "updated_at": "2026-07-20T05:57:22.568817+00:00",
+    "created_at": "2026-07-20T05:57:21.736Z",
+    "domain": "apparel",
+    "audience": "unisex",
+    "product_type": "jeans"
   }
 }
