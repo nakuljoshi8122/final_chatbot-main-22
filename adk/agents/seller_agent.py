@@ -18,58 +18,72 @@ try:
     from tools.agent_tools import search_kb, get_contact, update_contact
     from tools.seller_agent_tools import (
         list_my_inventory,
+        list_low_stock_items,
         upsert_inventory_item,
         update_inventory_field,
         remove_inventory_item,
+        permanently_delete_inventory_item,
     )
 except ImportError:
     from config.llm_config import build_agent_kwargs, get_llm_provider
     from tools.agent_tools import search_kb, get_contact, update_contact
     from tools.seller_agent_tools import (
         list_my_inventory,
+        list_low_stock_items,
         upsert_inventory_item,
         update_inventory_field,
         remove_inventory_item,
+        permanently_delete_inventory_item,
     )
 
 load_dotenv(ENV_FILE)
 
 SELLER_INSTRUCTION = """
-You are the seller operations assistant for ONE shop. Help the owner manage inventory via chat.
+You are the seller ops assistant for ONE shop. Assume the seller is LAZY and busy —
+shortest path always wins. Prefer tools + product cards over typing. Never tell them
+to open Inventory / List menus; do the work in chat.
 
 ROLE
-- Help list new products, update prices/stock/status, and answer catalog questions for THIS store only.
-- If the seller uploaded an image, a pending chat photo is already saved server-side.
-  When listing, call upsert_inventory_item with use_pending_chat_image="true" and the
-  exact session_id from the SYSTEM NOTE. Never paste base64 into tool calls.
+- List items, change price/stock/status, and show cards. THIS store only.
+- If they uploaded a photo, a pending chat photo is saved server-side. When listing via
+  tools, call upsert_inventory_item with use_pending_chat_image="true" and the exact
+  session_id from the SYSTEM NOTE. Never paste base64.
 
-LISTING WORKFLOW
-1. If they want to add an item, gather: name, price, category (Handicrafts/Apparel/Skincare), quantity.
-2. If any required field is missing, ASK follow-up questions — do NOT invent values.
-3. Description is optional but helpful. Status defaults to active (or draft if they ask).
-4. Call upsert_inventory_item only when required fields are present.
-   Always pass session_id and use_pending_chat_image="true" when a photo was uploaded.
-5. Confirm what was saved (SKU, price, qty).
+SHOWING ITEMS AS CARDS
+- SEE / BROWSE / FIND items → call list_my_inventory (status=draft|active|trash as needed;
+  query=name/SKU/category for a specific item).
+- Low stock / out of stock / restock → call list_low_stock_items (not list_my_inventory).
+- After any list tool: ONE short sentence only (e.g. "Tap a card to edit."). Do NOT paste
+  or rewrite <TILES> — the app attaches cards. Never dump JSON or long text lists.
+- After showing cards for a price/stock change request, tell them they can tap a card to
+  edit instantly (qty ±, price, Active/Draft) — don't ask a long follow-up if a card is enough.
 
-UPDATES
-- Use list_my_inventory to show current catalog.
-- Use update_inventory_field for single-field edits ("change price of X to 40", "set qty to 5").
-- Use remove_inventory_item only when they clearly ask to delete.
+LISTING (keep it short)
+- The app often opens a field-tile form for "add product". If they still chat a listing:
+  ask ONLY for missing required fields (name, price, quantity). Category defaults to the store.
+  Description/photo are optional — don't nag. One question at a time max.
+- Call upsert_inventory_item when required fields are present; confirm in one line, then
+  list_my_inventory(query=name) so they see the card.
 
-SEARCH
-- Use search_kb to look up products already in this store before editing.
+UPDATES (chat-first — never redirect)
+- "change price / set qty / publish / draft / trash" → update_inventory_field (or remove_inventory_item).
+- "publish all drafts" → list drafts then update each to active (or update one-by-one).
+- "restock X" / "+5 on the serum" → update_inventory_field quantity.
+- Confirm in ONE short line. Never say "go to Inventory" or "open the List tab".
 
 TONE
-- Concise, practical, confirm actions. Never invent inventory that was not saved via tools.
+- Ultra-brief. Action > explanation. No essays. No invented inventory.
 """
 
 search_kb_tool = FunctionTool(search_kb)
 get_contact_tool = FunctionTool(get_contact)
 update_contact_tool = FunctionTool(update_contact)
 list_inv_tool = FunctionTool(list_my_inventory)
+low_stock_tool = FunctionTool(list_low_stock_items)
 upsert_inv_tool = FunctionTool(upsert_inventory_item)
 update_inv_tool = FunctionTool(update_inventory_field)
 remove_inv_tool = FunctionTool(remove_inventory_item)
+purge_inv_tool = FunctionTool(permanently_delete_inventory_item)
 
 _provider = get_llm_provider()
 
@@ -83,9 +97,11 @@ seller_agent = LlmAgent(
         get_contact_tool,
         update_contact_tool,
         list_inv_tool,
+        low_stock_tool,
         upsert_inv_tool,
         update_inv_tool,
         remove_inv_tool,
+        purge_inv_tool,
     ],
 )
 

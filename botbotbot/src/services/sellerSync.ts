@@ -23,7 +23,20 @@ export async function syncSellerProductToApi(
   opts?: { forceRetag?: boolean },
 ): Promise<boolean> {
   try {
-    const image_base64 = await imageToBase64(item.imageUri);
+    const galleryUris = (item.imageUris?.length
+      ? item.imageUris
+      : item.imageUri
+        ? [item.imageUri]
+        : []
+    ).filter(Boolean);
+
+    const images_base64: string[] = [];
+    for (const uri of galleryUris.slice(0, 8)) {
+      const b64 = await imageToBase64(uri);
+      if (b64) images_base64.push(b64);
+    }
+    const image_base64 = images_base64[0] || (await imageToBase64(item.imageUri));
+
     const body: Record<string, unknown> = {
       sku: item.sku,
       name: item.name,
@@ -38,7 +51,10 @@ export async function syncSellerProductToApi(
       updated_at: item.updatedAt,
       force_retag: !!opts?.forceRetag,
     };
-    if (image_base64) {
+    if (images_base64.length) {
+      body.images_base64 = images_base64;
+      body.image_base64 = images_base64[0];
+    } else if (image_base64) {
       body.image_base64 = image_base64;
     } else if (item.imageUri && /^https?:\/\//i.test(item.imageUri)) {
       body.image_url = item.imageUri;
@@ -52,7 +68,7 @@ export async function syncSellerProductToApi(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       },
-      20000,
+      45000,
     );
     if (!res.ok) return false;
     const data = await res.json();
@@ -62,16 +78,43 @@ export async function syncSellerProductToApi(
   }
 }
 
-export async function removeSellerProductFromApi(sku: string): Promise<void> {
+/** Soft-delete: keep product row, mark trash on the API. */
+export async function softDeleteSellerProductOnApi(
+  sku: string,
+  storeId?: string,
+): Promise<boolean> {
   try {
-    await fetchWithTimeout(
-      `${API_BASE}/seller/products/${encodeURIComponent(sku)}`,
+    const q = new URLSearchParams();
+    if (storeId) q.set('store_id', storeId);
+    const qs = q.toString();
+    const res = await fetchWithTimeout(
+      `${API_BASE}/seller/products/${encodeURIComponent(sku)}${qs ? `?${qs}` : ''}`,
       { method: 'DELETE' },
-      5000,
+      8000,
     );
+    return res.ok;
   } catch {
-    // non-blocking
+    return false;
   }
+}
+
+/** Hard-delete: erase seller row + image + suppress seed forever. */
+export async function permanentlyDeleteSellerProductOnApi(sku: string): Promise<boolean> {
+  try {
+    const res = await fetchWithTimeout(
+      `${API_BASE}/seller/products/${encodeURIComponent(sku)}?permanent=true`,
+      { method: 'DELETE' },
+      8000,
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** @deprecated Prefer softDeleteSellerProductOnApi or permanentlyDeleteSellerProductOnApi */
+export async function removeSellerProductFromApi(sku: string): Promise<void> {
+  await permanentlyDeleteSellerProductOnApi(sku);
 }
 
 export async function requestSellerRetag(): Promise<void> {
@@ -129,7 +172,8 @@ export async function syncSellerItemsToApi(
     if (!isSeller) continue;
 
     if (item.status === 'trash') {
-      await removeSellerProductFromApi(item.sku);
+      // Keep trash listings on the API so the Trash tab can show them
+      if (await syncSellerProductToApi(item)) ok += 1;
       continue;
     }
     if (await syncSellerProductToApi(item)) ok += 1;

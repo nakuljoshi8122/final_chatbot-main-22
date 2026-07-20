@@ -21,5 +21,5 @@ export const SellerTheme = {
 export const SELLER_CATEGORIES = ['Handicrafts', 'Apparel', 'Skincare'] as const;
 export type SellerCategory = (typeof SELLER_CATEGORIES)[number];
 
-export const INVENTORY_STATUSES = ['active', 'draft', 'archive', 'trash'] as const;
+export const INVENTORY_STATUSES = ['active', 'draft', 'trash'] as const;
 export type InventoryStatus = (typeof INVENTORY_STATUSES)[number];

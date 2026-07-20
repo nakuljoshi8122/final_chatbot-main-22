@@ -7,6 +7,8 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -66,7 +68,16 @@ export default function NewStoreScreen() {
         <ThemedText style={styles.title}>Open a new store</ThemedText>
         <View style={{ width: 24 }} />
       </View>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 56 : 0}
+      >
+        <ScrollView
+          contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
         <ThemedText style={styles.label}>Store name *</ThemedText>
         <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Glow Lab" />
 
@@ -134,6 +145,7 @@ export default function NewStoreScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

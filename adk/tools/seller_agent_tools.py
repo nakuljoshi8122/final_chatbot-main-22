@@ -2,24 +2,27 @@
 
 from __future__ import annotations
 
+import json
 import re
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 try:
     from catalog.seller_catalog import (
-        delete_seller_product,
         get_seller_product,
         list_seller_products,
+        seed_product_as_seller_row,
+        set_sku_inventory_status,
         upsert_seller_product,
     )
     from stores.store_scope import get_current_store_id
     from stores.store_registry import get_store, normalize_category
 except ImportError:
     from catalog.seller_catalog import (
-        delete_seller_product,
         get_seller_product,
         list_seller_products,
+        seed_product_as_seller_row,
+        set_sku_inventory_status,
         upsert_seller_product,
     )
     from stores.store_scope import get_current_store_id
@@ -45,15 +48,53 @@ def _next_sku(category: str) -> str:
     return f"{prefix}-NEW-{uuid.uuid4().hex[:5].upper()}"
 
 
-async def list_my_inventory(store_id: str = "", status: str = "all") -> str:
-    """List products in this seller's store inventory.
+def _format_price(price: Any) -> str:
+    p = str(price or "").strip()
+    if not p:
+        return ""
+    return p if p.startswith("$") else f"${p}"
+
+
+def _row_to_tile(row: dict[str, Any]) -> dict[str, Any]:
+    """Shape a seller product into the tile schema the app renders."""
+    sku = str(row.get("sku") or "").strip().upper()
+    status = str(row.get("status") or "active").strip().lower()
+    qty = row.get("quantity")
+    images = row.get("images") if isinstance(row.get("images"), list) else []
+    images = [str(u) for u in images if str(u or "").strip()]
+    img = str(row.get("img") or (images[0] if images else ""))
+    return {
+        "id": sku,
+        "sku": sku,
+        "name": str(row.get("name") or sku),
+        "price": _format_price(row.get("price")),
+        "category": str(row.get("category") or ""),
+        "description": str(row.get("description") or "")[:220],
+        "status": status,
+        "quantity": qty if isinstance(qty, int) else 0,
+        "tag": status.upper(),
+        "img": img,
+        "images": images or ([img] if img else []),
+        "url": str(row.get("url") or img or ""),
+    }
+
+
+def _tiles_block(rows: list[dict[str, Any]]) -> str:
+    tiles = [_row_to_tile(r) for r in rows if r.get("sku")]
+    return "<TILES>" + json.dumps(tiles, ensure_ascii=False) + "</TILES>"
+
+
+async def list_my_inventory(store_id: str = "", status: str = "all", query: str = "") -> str:
+    """List products in this seller's store inventory as tappable product tiles.
 
     Args:
         store_id: Store id from SYSTEM NOTE (optional if already scoped).
-        status: Filter: all | active | draft | archive | trash.
+        status: Filter: all | active | draft | trash.
+        query: Optional search text to match by name, SKU, or category.
 
     Returns:
-        Inventory summary for the store.
+        A short summary line followed by a <TILES>...</TILES> block. ALWAYS include
+        the <TILES>...</TILES> block verbatim in your reply so the app can show cards.
     """
     sid, err = _store_id_or_error(store_id)
     if err:
@@ -61,17 +102,95 @@ async def list_my_inventory(store_id: str = "", status: str = "all") -> str:
     rows = list_seller_products(active_only=False, store_id=sid)
     if status and status != "all":
         rows = [r for r in rows if str(r.get("status") or "active").lower() == status.lower()]
+
+    q = str(query or "").strip().lower()
+    if q:
+        def _match(r: dict[str, Any]) -> bool:
+            return (
+                q in str(r.get("name") or "").lower()
+                or q in str(r.get("sku") or "").lower()
+                or q in str(r.get("category") or "").lower()
+                or q in str(r.get("description") or "").lower()
+            )
+
+        rows = [r for r in rows if _match(r)]
+
     if not rows:
-        return f"No products in store {sid} yet. Use upsert_inventory_item to add one."
-    lines = [f"INVENTORY for store {sid} ({len(rows)} items):"]
-    for r in rows[:40]:
-        lines.append(
-            f"- {r.get('name')} | SKU={r.get('sku')} | ${r.get('price') or '?'} | "
-            f"qty={r.get('quantity')} | status={r.get('status')} | cat={r.get('category')}"
+        if q:
+            return f"No items match “{query}”. Try another name, or say ‘show all items’."
+        return (
+            f"No products in store {sid} yet. Tell me a product name, price and quantity "
+            "(or upload a photo) and I'll list it for you."
         )
-    if len(rows) > 40:
-        lines.append(f"…and {len(rows) - 40} more")
-    return "\n".join(lines)
+
+    shown = rows[:24]
+    scope = "" if status in ("", "all") else f" {status}"
+    label = f"“{query}”" if q else f"{len(rows)}{scope} item" + ("s" if len(rows) != 1 else "")
+    summary = f"Here " + ("is" if len(shown) == 1 else "are") + f" your {label}. Tap a card to view details or edit."
+    return summary + "\n" + _tiles_block(shown)
+
+
+def _qty_of(row: dict[str, Any]) -> int:
+    try:
+        return int(row.get("quantity") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+async def list_low_stock_items(store_id: str = "", threshold: int = 3) -> str:
+    """Show inventory that needs restocking, as product tiles.
+
+    Priority logic: if any items are OUT OF STOCK (0 units) show only those;
+    otherwise show items with fewer than ``threshold`` units; if none qualify,
+    report that nothing is low on stock.
+
+    Args:
+        store_id: Store id from SYSTEM NOTE (optional if already scoped).
+        threshold: Low-stock cutoff in units (default 3 -> shows 1-2 units).
+
+    Returns:
+        A short summary line, optionally followed by a <TILES>...</TILES> block.
+        ALWAYS include the <TILES>...</TILES> block verbatim so the app shows cards.
+    """
+    sid, err = _store_id_or_error(store_id)
+    if err:
+        return err
+    try:
+        cutoff = int(threshold)
+    except (TypeError, ValueError):
+        cutoff = 3
+    if cutoff < 1:
+        cutoff = 3
+
+    # Seller's live inventory (exclude trashed items).
+    rows = [
+        r
+        for r in list_seller_products(active_only=False, store_id=sid)
+        if str(r.get("status") or "active").lower() != "trash"
+    ]
+
+    out_of_stock = sorted((r for r in rows if _qty_of(r) <= 0), key=_qty_of)
+    low_stock = sorted((r for r in rows if 0 < _qty_of(r) < cutoff), key=_qty_of)
+
+    if out_of_stock:
+        shown = out_of_stock[:24]
+        n = len(out_of_stock)
+        summary = (
+            f"{n} item{'s' if n != 1 else ''} {'are' if n != 1 else 'is'} out of stock — "
+            "tap a card to restock."
+        )
+        return summary + "\n" + _tiles_block(shown)
+
+    if low_stock:
+        shown = low_stock[:24]
+        n = len(low_stock)
+        summary = (
+            f"{n} item{'s' if n != 1 else ''} {'are' if n != 1 else 'is'} running low "
+            f"(under {cutoff} units) — tap a card to restock."
+        )
+        return summary + "\n" + _tiles_block(shown)
+
+    return "Good news — no items are low on stock right now."
 
 
 async def upsert_inventory_item(
@@ -101,7 +220,7 @@ async def upsert_inventory_item(
         category: Handicrafts | Apparel | Skincare.
         quantity: Stock count as string/number.
         description: Specs / details.
-        status: active | draft | archive | trash.
+        status: active | draft | trash.
         image_base64: Optional (prefer pending chat image instead).
         use_pending_chat_image: "true" to attach the photo uploaded in this chat turn.
         session_id: Exact session_id from SYSTEM NOTE (needed for pending image).
@@ -214,6 +333,10 @@ async def update_inventory_field(
         return "Error: sku is required."
     row = get_seller_product(sku)
     if not row:
+        # Seed/Pinterest items live in KB until first edit — hydrate so status
+        # changes keep the photo instead of creating a blank seller override.
+        row = seed_product_as_seller_row(sku, sid)
+    if not row:
         return f"Error: product {sku} not found."
     if str(row.get("store_id") or "") not in ("", sid) and str(row.get("store_id")) != sid:
         return f"Error: product {sku} does not belong to store {sid}."
@@ -241,11 +364,22 @@ async def update_inventory_field(
         updated = upsert_seller_product(payload, tag=False)
     except Exception as e:
         return f"Error updating product: {e}"
+
+    if field == "status":
+        try:
+            set_sku_inventory_status(
+                sku,
+                str(updated.get("status") or value),
+                name=str(updated.get("name") or ""),
+            )
+        except Exception:
+            pass
+
     return f"Updated {sku}: {field}={updated.get(field, value)}. Catalog is live."
 
 
 async def remove_inventory_item(sku: str, store_id: str = "") -> str:
-    """Delete a product from this store's inventory.
+    """Move a product to Trash (soft delete). Use permanently_delete_inventory_item to erase it.
 
     Args:
         sku: Product SKU to delete.
@@ -258,10 +392,42 @@ async def remove_inventory_item(sku: str, store_id: str = "") -> str:
     if err:
         return err
     sku = str(sku or "").strip().upper()
-    row = get_seller_product(sku)
+    if not sku:
+        return "Error: sku is required."
+    try:
+        from catalog.seller_catalog import soft_delete_seller_product
+    except ImportError:
+        from catalog.seller_catalog import soft_delete_seller_product
+    row = soft_delete_seller_product(sku, sid)
     if not row:
         return f"Error: product {sku} not found."
-    if str(row.get("store_id") or "") not in ("", sid) and str(row.get("store_id")) != sid:
+    return f"Moved {sku} to Trash. It can be restored from the Trash tab."
+
+
+async def permanently_delete_inventory_item(sku: str, store_id: str = "") -> str:
+    """Permanently erase a product (seller row, image, and seed visibility). Cannot be undone.
+
+    Args:
+        sku: Product SKU to permanently delete.
+        store_id: Store id from SYSTEM NOTE.
+
+    Returns:
+        Confirmation or error.
+    """
+    sid, err = _store_id_or_error(store_id)
+    if err:
+        return err
+    sku = str(sku or "").strip().upper()
+    if not sku:
+        return "Error: sku is required."
+    try:
+        from catalog.seller_catalog import get_seller_product, purge_seller_product, seed_product_as_seller_row
+    except ImportError:
+        from catalog.seller_catalog import get_seller_product, purge_seller_product, seed_product_as_seller_row
+    row = get_seller_product(sku) or seed_product_as_seller_row(sku, sid)
+    if row and str(row.get("store_id") or "") not in ("", sid) and str(row.get("store_id")) != sid:
         return f"Error: product {sku} does not belong to this store."
-    ok = delete_seller_product(sku)
-    return f"Deleted {sku}." if ok else f"Could not delete {sku}."
+    result = purge_seller_product(sku)
+    if not result.get("ok"):
+        return f"Could not permanently delete {sku}."
+    return f"Permanently deleted {sku}."

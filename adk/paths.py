@@ -18,6 +18,10 @@ SELLER_PRODUCTS_JSON = DATA_DIR / "seller_products.json"
 INVENTORY_VISIBILITY_JSON = DATA_DIR / "inventory_visibility.json"
 STORES_JSON = DATA_DIR / "stores.json"
 STORE_QUERIES_DIR = DATA_DIR / "store_queries"
+# Buyer commerce (cross-shop cart, orders, restock notifications)
+BUYER_CARTS_JSON = DATA_DIR / "buyer_carts.json"
+BUYER_ORDERS_JSON = DATA_DIR / "buyer_orders.json"
+RESTOCK_NOTIFY_JSON = DATA_DIR / "restock_notify.json"
 PRODUCT_IMAGES_JSON = DATA_DIR / "product_images.json"
 BOUTIQUE_PRODUCT_IMAGES_JSON = DATA_DIR / "boutique_product_images.json"
 

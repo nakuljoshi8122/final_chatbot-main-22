@@ -1,14 +1,15 @@
-import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
-import { Slot, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
+import { Slot, useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/shared/ui/ThemedText';
 import { useApp } from '@/contexts/AppContext';
+import { fetchStoreQueries } from '@/services/storesApi';
 
 const TABS = [
   { key: '', label: 'Chat', icon: 'chatbubble-ellipses-outline' as const },
-  { key: 'list', label: 'List', icon: 'add-circle-outline' as const },
+  { key: 'list', label: 'Add', icon: 'add-circle-outline' as const },
   { key: 'inventory', label: 'Inventory', icon: 'cube-outline' as const },
   { key: 'queries', label: 'Queries', icon: 'help-circle-outline' as const },
 ];
@@ -18,6 +19,7 @@ export default function SellerStoreLayout() {
   const router = useRouter();
   const pathname = usePathname();
   const { selectedStore, stores } = useApp();
+  const [openQueries, setOpenQueries] = useState(0);
   const store =
     selectedStore?.id === storeId
       ? selectedStore
@@ -34,6 +36,19 @@ export default function SellerStoreLayout() {
     if (pathname.endsWith('/queries')) return 'queries';
     return '';
   })();
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        const rows = await fetchStoreQueries(String(storeId), 'open');
+        if (!cancelled) setOpenQueries(rows.length);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [storeId]),
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -57,9 +72,17 @@ export default function SellerStoreLayout() {
       <View style={styles.tabs}>
         {TABS.map((t) => {
           const on = activeKey === t.key;
+          const badge = t.key === 'queries' ? openQueries : 0;
           return (
             <TouchableOpacity key={t.key || 'chat'} style={styles.tab} onPress={() => go(t.key)}>
-              <Ionicons name={t.icon} size={18} color={on ? '#1D3557' : '#888'} />
+              <View>
+                <Ionicons name={t.icon} size={18} color={on ? '#1D3557' : '#888'} />
+                {badge > 0 ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{badge > 9 ? '9+' : badge}</Text>
+                  </View>
+                ) : null}
+              </View>
               <ThemedText style={[styles.tabLabel, on && styles.tabLabelOn]}>{t.label}</ThemedText>
             </TouchableOpacity>
           );
@@ -104,5 +127,18 @@ const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 6 },
   tabLabel: { fontSize: 11, color: '#888', fontWeight: '600' },
   tabLabelOn: { color: '#1D3557' },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    backgroundColor: '#B00020',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
   body: { flex: 1 },
 });

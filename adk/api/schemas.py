@@ -14,6 +14,8 @@ class SellerProductIn(BaseModel):
     status: str = "active"
     store_id: str | None = None
     image_base64: str | None = None
+    # Extra product photos (same product, multiple angles)
+    images_base64: list[str] | None = None
     image_url: str | None = None
     url: str | None = None
     created_at: str | None = None
