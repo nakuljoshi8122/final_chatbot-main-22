@@ -1,0 +1,140 @@
+{
+  "smoke-buyer-1": [
+    {
+      "id": "ord-2c8cf76e57",
+      "buyer_id": "smoke-buyer-1",
+      "items": [
+        {
+          "sku": "SK-NEW-2FADF",
+          "name": "Retinol Cream",
+          "price": "2000",
+          "img": "",
+          "url": "http://192.168.1.17:8000/docs",
+          "category": "Skincare",
+          "store_id": "store_12a72aa2ab",
+          "qty": 1
+        }
+      ],
+      "total": 2000.0,
+      "created_at": "2026-07-19T17:52:38.267846+00:00"
+    }
+  ],
+  "buyer-mrs3s1gc-ajb5k0d4": [
+    {
+      "id": "ord-357419fa88",
+      "buyer_id": "buyer-mrs3s1gc-ajb5k0d4",
+      "items": [
+        {
+          "sku": "SK-BHA-TN100",
+          "name": "Clarifying BHA Toner",
+          "price": "$25",
+          "img": "http://192.168.1.17:8000/product-images/SK-BHA-TN100.jpg",
+          "url": "http://192.168.1.17:8000/product-images/SK-BHA-TN100.jpg",
+          "category": "Skincare",
+          "store_id": "store_12a72aa2ab",
+          "qty": 2,
+          "added_at": "2026-07-20T05:18:45.774718+00:00"
+        },
+        {
+          "sku": "HC-INC-SW40",
+          "name": "Sandalwood Incense Gift Box",
+          "price": "$15",
+          "img": "http://192.168.1.17:8000/product-images/HC-INC-SW40.jpg",
+          "url": "http://192.168.1.17:8000/product-images/HC-INC-SW40.jpg",
+          "category": "Handicrafts",
+          "store_id": "store_atelier_craft",
+          "qty": 2,
+          "added_at": "2026-07-20T05:18:55.354269+00:00"
+        }
+      ],
+      "total": 80.0,
+      "created_at": "2026-07-20T05:19:03.340462+00:00"
+    },
+    {
+      "id": "ord-86c8aaf359",
+      "buyer_id": "buyer-mrs3s1gc-ajb5k0d4",
+      "items": [
+        {
+          "sku": "AP-NEW-RTSRH",
+          "name": "Quarter Zip Pullover",
+          "price": "$18",
+          "img": "http://192.168.1.17:8000/product-images/AP-NEW-RTSRH.jpg",
+          "url": "http://192.168.1.17:8000/product-images/AP-NEW-RTSRH.jpg",
+          "category": "Apparel",
+          "store_id": "store_thread_co",
+          "qty": 14,
+          "added_at": "2026-07-20T05:17:32.822530+00:00"
+        }
+      ],
+      "total": 252.0,
+      "created_at": "2026-07-20T05:17:44.075643+00:00"
+    },
+    {
+      "id": "ord-ee5ba787f0",
+      "buyer_id": "buyer-mrs3s1gc-ajb5k0d4",
+      "items": [
+        {
+          "sku": "SK-NEW-72AAA",
+          "name": "Sunblock",
+          "price": "499",
+          "img": "http://192.168.1.13:8000/product-images/SK-NEW-72AAA.jpg",
+          "url": "http://192.168.1.13:8000/product-images/SK-NEW-72AAA.jpg",
+          "category": "Skincare",
+          "store_id": "store_12a72aa2ab",
+          "qty": 2,
+          "added_at": "2026-07-19T20:08:15.933841+00:00"
+        }
+      ],
+      "total": 998.0,
+      "created_at": "2026-07-19T20:08:22.125381+00:00"
+    },
+    {
+      "id": "ord-b947ad0252",
+      "buyer_id": "buyer-mrs3s1gc-ajb5k0d4",
+      "items": [
+        {
+          "sku": "SK-NEW-72AAA",
+          "name": "Sunblock",
+          "price": "499",
+          "img": "http://192.168.1.17:8000/product-images/SK-NEW-72AAA.jpg",
+          "url": "http://192.168.1.17:8000/product-images/SK-NEW-72AAA.jpg",
+          "category": "Skincare",
+          "store_id": "store_12a72aa2ab",
+          "qty": 1,
+          "added_at": "2026-07-19T20:06:22.535940+00:00"
+        },
+        {
+          "sku": "HC-MUG-BP01",
+          "name": "Ceramic Blue Pottery Mug",
+          "price": "$18",
+          "img": "http://192.168.1.13:8000/product-images/HC-MUG-BP01.jpg",
+          "url": "http://192.168.1.13:8000/product-images/HC-MUG-BP01.jpg",
+          "category": "Handicrafts",
+          "store_id": "store_atelier_craft",
+          "qty": 1,
+          "added_at": "2026-07-19T20:06:32.802722+00:00"
+        }
+      ],
+      "total": 517.0,
+      "created_at": "2026-07-19T20:06:43.655198+00:00"
+    },
+    {
+      "id": "ord-bacdab1687",
+      "buyer_id": "buyer-mrs3s1gc-ajb5k0d4",
+      "items": [
+        {
+          "sku": "HC-WALL-BR28",
+          "name": "Brass Mandala Wall Plate",
+          "price": "$62",
+          "img": "http://192.168.1.13:8000/product-images/HC-WALL-BR28.jpg",
+          "url": "http://192.168.1.13:8000/product-images/HC-WALL-BR28.jpg",
+          "category": "Handicrafts",
+          "store_id": "store_atelier_craft",
+          "qty": 1
+        }
+      ],
+      "total": 62.0,
+      "created_at": "2026-07-19T20:06:34.784616+00:00"
+    }
+  ]
+}

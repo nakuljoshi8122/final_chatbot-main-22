@@ -5,7 +5,7 @@ import SellerChatInterface from '@/features/seller/components/SellerChatInterfac
 import { useApp } from '@/contexts/AppContext';
 
 export default function SellerChatScreen() {
-  const { storeId } = useLocalSearchParams<{ storeId: string }>();
+  const { storeId, openAdd } = useLocalSearchParams<{ storeId: string; openAdd?: string }>();
   const { selectedStore, stores } = useApp();
   const store =
     selectedStore?.id === storeId
@@ -18,6 +18,7 @@ export default function SellerChatScreen() {
         storeId={String(storeId)}
         storeName={store?.name || 'Store'}
         category={String(store?.category || 'Handicrafts')}
+        autoOpenAdd={openAdd === '1'}
       />
     </View>
   );

@@ -24,13 +24,17 @@ import {
 } from '@/shared/theme/SellerTheme';
 import {
   createInventoryItem,
+  deleteInventoryItem,
   getInventoryItem,
   hydrateInventoryFromApi,
+  permanentlyDeleteInventoryItem,
   persistPickedImage,
   productImageUrl,
+  restoreInventoryItem,
   updateInventoryItem,
 } from '@/services/inventoryStore';
 import { fetchSellerProduct } from '@/services/storesApi';
+import type { InventoryStatus } from '@/shared/theme/SellerTheme';
 
 function resolveParam(value: string | string[] | undefined): string {
   if (!value) return '';
@@ -76,7 +80,7 @@ export default function InventoryEditScreen() {
   const [description, setDescription] = useState('');
   const [categoryNotes, setCategoryNotes] = useState('');
   const [quantity, setQuantity] = useState('10');
-  const [status, setStatus] = useState<'active' | 'draft'>('active');
+  const [status, setStatus] = useState<InventoryStatus>('active');
   const [imageUri, setImageUri] = useState<string | undefined>();
   const [customPhoto, setCustomPhoto] = useState(false);
 
@@ -101,7 +105,7 @@ export default function InventoryEditScreen() {
         setDescription(item.description);
         setCategoryNotes(item.categoryNotes);
         setQuantity(String(item.quantity));
-        setStatus(item.status === 'draft' ? 'draft' : 'active');
+        setStatus(item.status || 'active');
         setImageUri(item.imageUri);
         setCustomPhoto(!!item.imageUri && !item.imageUri.includes('/product-images/'));
       } finally {
@@ -255,6 +259,119 @@ export default function InventoryEditScreen() {
     }
   };
 
+  const onDelete = () => {
+    if (!isEdit) return;
+    const label = name.trim() || sku.trim() || editId;
+    Alert.alert(
+      'Move to Trash?',
+      `"${label}" will move to Trash. You can restore it later, or permanently delete it from Trash.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Move to Trash',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setSaving(true);
+              try {
+                // Ensure local row exists for seed/API products
+                let item = await getInventoryItem(editId);
+                if (!item) {
+                  item = await hydrateInventoryFromApi({
+                    sku: sku.trim() || editId,
+                    name: name || editId,
+                    category,
+                    price,
+                    description,
+                    category_notes: categoryNotes,
+                    quantity: Number.parseInt(quantity, 10) || 0,
+                    status,
+                    img: previewUri,
+                    store_id: storeId || undefined,
+                  });
+                }
+                await deleteInventoryItem(item.id);
+                router.back();
+              } catch (err) {
+                Alert.alert(
+                  'Could not delete',
+                  err instanceof Error ? err.message : 'Unknown error',
+                );
+              } finally {
+                setSaving(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
+  const onRestore = () => {
+    if (!isEdit) return;
+    void (async () => {
+      setSaving(true);
+      try {
+        let item = await getInventoryItem(editId);
+        if (!item) {
+          item = await hydrateInventoryFromApi({
+            sku: sku.trim() || editId,
+            name: name || editId,
+            category,
+            price,
+            description,
+            category_notes: categoryNotes,
+            quantity: Number.parseInt(quantity, 10) || 0,
+            status: 'trash',
+            img: previewUri,
+            store_id: storeId || undefined,
+          });
+        }
+        await restoreInventoryItem(item.id);
+        router.back();
+      } catch (err) {
+        Alert.alert(
+          'Could not restore',
+          err instanceof Error ? err.message : 'Unknown error',
+        );
+      } finally {
+        setSaving(false);
+      }
+    })();
+  };
+
+  const onPermanentDelete = () => {
+    if (!isEdit) return;
+    const label = name.trim() || sku.trim() || editId;
+    Alert.alert(
+      'Permanently delete?',
+      `This erases "${label}" completely (listing, image, and catalog data). This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Permanently Delete',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setSaving(true);
+              try {
+                await permanentlyDeleteInventoryItem(sku.trim() || editId);
+                router.back();
+              } catch (err) {
+                Alert.alert(
+                  'Could not delete',
+                  err instanceof Error ? err.message : 'Unknown error',
+                );
+              } finally {
+                setSaving(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -285,10 +402,12 @@ export default function InventoryEditScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
       >
         <ScrollView
-          contentContainerStyle={styles.form}
+          contentContainerStyle={[styles.form, { paddingBottom: 120 }]}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}
         >
           <TouchableOpacity
@@ -396,31 +515,71 @@ export default function InventoryEditScreen() {
 
           <Text style={styles.label}>Status</Text>
           <View style={styles.chips}>
-            {(['active', 'draft'] as const).map((s) => {
-              const active = status === s;
-              return (
-                <TouchableOpacity
-                  key={s}
-                  style={[styles.chip, active && styles.chipActive]}
-                  onPress={() => setStatus(s)}
-                >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                    {s === 'active' ? 'Active' : 'Draft'}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {status === 'trash' ? (
+              <View style={[styles.chip, styles.chipActive]}>
+                <Text style={[styles.chipText, styles.chipTextActive]}>Trash</Text>
+              </View>
+            ) : (
+              (['active', 'draft'] as const).map((s) => {
+                const active = status === s;
+                return (
+                  <TouchableOpacity
+                    key={s}
+                    style={[styles.chip, active && styles.chipActive]}
+                    onPress={() => setStatus(s)}
+                  >
+                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                      {s === 'active' ? 'Active' : 'Draft'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })
+            )}
           </View>
 
-          <TouchableOpacity
-            style={[styles.saveButton, saving && { opacity: 0.6 }]}
-            onPress={onSave}
-            disabled={saving}
-          >
-            <Text style={styles.saveButtonText}>
-              {isEdit ? 'Update product' : 'List product'}
-            </Text>
-          </TouchableOpacity>
+          {status !== 'trash' ? (
+            <TouchableOpacity
+              style={[styles.saveButton, saving && { opacity: 0.6 }]}
+              onPress={onSave}
+              disabled={saving}
+            >
+              <Text style={styles.saveButtonText}>
+                {isEdit ? 'Update product' : 'List product'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {isEdit && status === 'trash' ? (
+            <>
+              <TouchableOpacity
+                style={[styles.restoreButton, saving && { opacity: 0.6 }]}
+                onPress={onRestore}
+                disabled={saving}
+              >
+                <Ionicons name="arrow-undo-outline" size={18} color="#000" />
+                <Text style={styles.restoreButtonText}>Restore Item</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteButton, saving && { opacity: 0.6 }]}
+                onPress={onPermanentDelete}
+                disabled={saving}
+              >
+                <Ionicons name="trash-outline" size={18} color="#fff" />
+                <Text style={styles.deleteButtonText}>Permanently Delete</Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
+
+          {isEdit && status !== 'trash' ? (
+            <TouchableOpacity
+              style={[styles.deleteButton, saving && { opacity: 0.6 }]}
+              onPress={onDelete}
+              disabled={saving}
+            >
+              <Ionicons name="trash-outline" size={18} color="#fff" />
+              <Text style={styles.deleteButtonText}>Move to Trash</Text>
+            </TouchableOpacity>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -542,6 +701,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveButtonText: {
+    color: SellerTheme.chipActiveText,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  deleteButton: {
+    marginTop: 16,
+    marginBottom: 24,
+    backgroundColor: '#B3261E',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  restoreButton: {
+    marginTop: 16,
+    backgroundColor: SellerTheme.chipActive,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  restoreButtonText: {
     color: SellerTheme.chipActiveText,
     fontSize: 16,
     fontWeight: '700',

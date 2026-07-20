@@ -46,5 +46,17 @@
     "address": "Hjjnbcx",
     "created_at": "2026-07-16T12:26:36.827141+00:00",
     "updated_at": "2026-07-16T12:26:36.827159+00:00"
+  },
+  "store_12a72aa2ab": {
+    "id": "store_12a72aa2ab",
+    "name": "Glow lab",
+    "owner_name": "Tanishq",
+    "owner_email": "hdhdhsbshzjs",
+    "owner_phone": "9654416111",
+    "category": "Skincare",
+    "description": "I sell skincare for all skin types",
+    "address": "New delhi",
+    "created_at": "2026-07-17T11:36:27.265335+00:00",
+    "updated_at": "2026-07-17T11:36:27.265346+00:00"
   }
 }

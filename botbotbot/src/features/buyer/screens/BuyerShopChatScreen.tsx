@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -22,7 +21,10 @@ import {
 import { parseAgentResponse } from '@/shared/utils/parseTiles';
 import { ProductTileGrid } from '@/features/chat-shared/components/ProductTileCard';
 import { useApp } from '@/contexts/AppContext';
+import { useCart } from '@/contexts/CartContext';
 import { ThemedText } from '@/shared/ui/ThemedText';
+import TypingDots from '@/shared/ui/TypingDots';
+import { useKeyboardHeight } from '@/shared/hooks/useKeyboardHeight';
 
 function categoryTag(category: string): string {
   const c = (category || '').toLowerCase();
@@ -38,7 +40,9 @@ export default function BuyerShopChatScreen() {
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
   const { selectedStore, stores } = useApp();
+  const { count: cartCount } = useCart();
   const store =
     selectedStore?.id === storeId
       ? selectedStore
@@ -158,34 +162,56 @@ export default function BuyerShopChatScreen() {
           </ThemedText>
           <ThemedText style={styles.tag}>{store?.category || category}</ThemedText>
         </View>
-        <TouchableOpacity
-          onPress={async () => {
-            const id = apiService.generateSessionId();
-            await clearStoredSessionId(sessionKey);
-            await saveStoredSessionId(id, sessionKey);
-            setSessionId(id);
-            setMessages([
-              {
-                id: 'welcome',
-                text: `New chat with ${store?.name || 'shop'}.`,
-                isUser: false,
-                timestamp: new Date(),
-              },
-            ]);
-          }}
-          hitSlop={8}
-        >
-          <Text style={styles.new}>New</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => router.push(`/shelf/${storeId}`)}
+            hitSlop={8}
+            style={styles.shelfBtn}
+          >
+            <Ionicons name="grid-outline" size={16} color="#1D3557" />
+            <Text style={styles.shelfText}>Shelf</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push('/cart')}
+            hitSlop={8}
+            style={styles.cartBtn}
+          >
+            <Ionicons name="cart-outline" size={22} color="#111" />
+            {cartCount > 0 ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{cartCount}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={async () => {
+              const id = apiService.generateSessionId();
+              await clearStoredSessionId(sessionKey);
+              await saveStoredSessionId(id, sessionKey);
+              setSessionId(id);
+              setMessages([
+                {
+                  id: 'welcome',
+                  text: `New chat with ${store?.name || 'shop'}.`,
+                  isUser: false,
+                  timestamp: new Date(),
+                },
+              ]);
+            }}
+            hitSlop={8}
+          >
+            <Text style={styles.new}>New</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <View style={styles.chatBody}>
         <ScrollView
           ref={scrollRef}
+          style={styles.messages}
           contentContainerStyle={{ padding: 12, paddingBottom: 20 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         >
           {messages.map((m) => (
@@ -198,10 +224,22 @@ export default function BuyerShopChatScreen() {
               ) : null}
             </View>
           ))}
-          {isLoading ? <Text style={styles.typing}>Thinking…</Text> : null}
+          {isLoading ? (
+            <View style={[styles.bubble, styles.bot, styles.typingBubble]}>
+              <TypingDots />
+            </View>
+          ) : null}
         </ScrollView>
 
-        <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+        <View
+          style={[
+            styles.inputRow,
+            {
+              paddingBottom:
+                keyboardHeight > 0 ? 8 : Math.max(insets.bottom, 8),
+            },
+          ]}
+        >
           <TextInput
             style={styles.input}
             value={inputText}
@@ -209,18 +247,27 @@ export default function BuyerShopChatScreen() {
             placeholder="Ask about this shop's products…"
             placeholderTextColor="#999"
             onSubmitEditing={send}
+            onFocus={() => {
+              setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+            }}
           />
           <TouchableOpacity style={styles.send} onPress={send}>
             <Ionicons name="arrow-up" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+        {/* iOS: push composer above keyboard. Android resize mode handles this. */}
+        {Platform.OS === 'ios' && keyboardHeight > 0 ? (
+          <View style={{ height: keyboardHeight }} />
+        ) : null}
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F5F5' },
+  chatBody: { flex: 1 },
+  messages: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -234,6 +281,31 @@ const styles = StyleSheet.create({
   headerCenter: { flex: 1, alignItems: 'center' },
   name: { fontSize: 16, fontWeight: '700', color: '#111' },
   tag: { fontSize: 11, color: '#666', marginTop: 2 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  shelfBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EAF0F7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  shelfText: { color: '#1D3557', fontWeight: '700', fontSize: 12 },
+  cartBtn: { padding: 2 },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -6,
+    backgroundColor: '#B00020',
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   new: { fontWeight: '700', color: '#1D3557', fontSize: 13 },
   bubble: {
     maxWidth: '88%',
@@ -250,6 +322,7 @@ const styles = StyleSheet.create({
   },
   text: { fontSize: 15, color: '#111', lineHeight: 21 },
   typing: { color: '#888', fontStyle: 'italic', marginLeft: 8 },
+  typingBubble: { paddingVertical: 14, paddingHorizontal: 16 },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',

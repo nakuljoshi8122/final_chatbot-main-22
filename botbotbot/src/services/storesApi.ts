@@ -138,6 +138,7 @@ export type ApiSellerProduct = {
   quantity?: number;
   status?: string;
   img?: string;
+  images?: string[];
   url?: string;
   store_id?: string;
 };

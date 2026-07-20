@@ -20,6 +20,7 @@ import { useStore } from '@/features/legacy-store/context/StoreContext';
 import {
   InventoryItem,
   loadInventory,
+  permanentlyDeleteInventoryItem,
   pushSellerListingsToChat,
   setItemQuantity,
   setItemStatus,
@@ -28,7 +29,6 @@ import {
 const FILTERS: { key: InventoryStatus; label: string }[] = [
   { key: 'active', label: 'Active' },
   { key: 'draft', label: 'Draft' },
-  { key: 'archive', label: 'Archive' },
   { key: 'trash', label: 'Trash' },
 ];
 
@@ -118,11 +118,35 @@ export default function InventoryScreen() {
     Alert.alert('Move to Trash', `Delete “${selected.name}”? You can restore it from Trash.`, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete',
+        text: 'Move to Trash',
         style: 'destructive',
         onPress: () => moveStatus('trash'),
       },
     ]);
+  };
+
+  const confirmPermanentDelete = () => {
+    if (!selected) return;
+    Alert.alert(
+      'Permanently delete?',
+      `This erases “${selected.name}” completely (listing, image, and catalog data). This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Permanently Delete',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              const id = selected.id;
+              await permanentlyDeleteInventoryItem(id);
+              setMoreOpen(false);
+              setSelected(null);
+              setItems((prev) => prev.filter((i) => i.id !== id));
+            })();
+          },
+        },
+      ],
+    );
   };
 
   const renderRow = ({ item }: { item: InventoryItem }) => (
@@ -292,32 +316,28 @@ export default function InventoryScreen() {
                   <TouchableOpacity style={styles.moreItem} onPress={() => openEdit(selected)}>
                     <Text style={styles.moreItemText}>Edit</Text>
                   </TouchableOpacity>
-                  {selected.status !== 'archive' && (
-                    <TouchableOpacity
-                      style={styles.moreItem}
-                      onPress={() => moveStatus('archive')}
-                    >
-                      <Text style={styles.moreItemText}>Archive</Text>
-                    </TouchableOpacity>
-                  )}
-                  {selected.status === 'archive' && (
-                    <TouchableOpacity
-                      style={styles.moreItem}
-                      onPress={() => moveStatus('active')}
-                    >
-                      <Text style={styles.moreItemText}>Restore to Active</Text>
-                    </TouchableOpacity>
-                  )}
                   {selected.status === 'trash' ? (
-                    <TouchableOpacity
-                      style={styles.moreItem}
-                      onPress={() => moveStatus('active')}
-                    >
-                      <Text style={styles.moreItemText}>Restore from Trash</Text>
-                    </TouchableOpacity>
+                    <>
+                      <TouchableOpacity
+                        style={styles.moreItem}
+                        onPress={() => moveStatus('active')}
+                      >
+                        <Text style={styles.moreItemText}>Restore Item</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.moreItem}
+                        onPress={confirmPermanentDelete}
+                      >
+                        <Text style={[styles.moreItemText, styles.dangerText]}>
+                          Permanently Delete
+                        </Text>
+                      </TouchableOpacity>
+                    </>
                   ) : (
                     <TouchableOpacity style={styles.moreItem} onPress={confirmDelete}>
-                      <Text style={[styles.moreItemText, styles.dangerText]}>Delete</Text>
+                      <Text style={[styles.moreItemText, styles.dangerText]}>
+                        Move to Trash
+                      </Text>
                     </TouchableOpacity>
                   )}
                   {selected.status === 'draft' && (

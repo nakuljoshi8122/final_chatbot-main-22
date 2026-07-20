@@ -279,6 +279,23 @@ def sanitize_boutique_response(
     except Exception:
         pass
 
+    # Hide sold-out / inactive items from customer chat (the Shelf still shows them).
+    try:
+        try:
+            from catalog.seller_catalog import is_sku_available
+        except ImportError:
+            from catalog.seller_catalog import is_sku_available
+
+        def _tile_sku(t: dict[str, Any]) -> str:
+            tid = str(t.get("id") or "")
+            if tid.startswith("tile-"):
+                return tid[5:]
+            return str(t.get("sku") or "")
+
+        tiles = [t for t in tiles if (not _tile_sku(t)) or is_sku_available(_tile_sku(t))]
+    except Exception:
+        pass
+
     prose = _clean_prose(text)
     looked_like_product_dump = bool(
         MD_IMG_RE.search(text or "")

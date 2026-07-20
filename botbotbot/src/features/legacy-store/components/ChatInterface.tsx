@@ -8,13 +8,11 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Keyboard,
   Linking,
   Pressable,
   Alert,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 import { apiService, ChatMessage } from '@/services/api-fetch';
@@ -26,6 +24,7 @@ import {
 } from '@/shared/utils/chatSession';
 import { parseAgentResponse } from '@/shared/utils/parseTiles';
 import { useScreenInsets } from '@/shared/hooks/useScreenInsets';
+import { useKeyboardHeight } from '@/shared/hooks/useKeyboardHeight';
 import { useVoiceRecording } from '@/shared/hooks/useVoiceRecording';
 import VoiceMessage from '@/features/chat-shared/components/VoiceMessage';
 import { ProductTileGrid } from '@/features/chat-shared/components/ProductTileCard';
@@ -56,9 +55,9 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
   const [apiNotice, setApiNotice] = useState<string | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
-  const insets = useSafeAreaInsets();
   const { headerPaddingTop, tabBarHeight } = useScreenInsets();
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardVisible = keyboardHeight > 0;
 
   const {
     isRecording,
@@ -143,22 +142,10 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
   }, [sessionId, storeId]);
 
   useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const onShow = () => {
-      setKeyboardVisible(true);
+    if (keyboardVisible) {
       setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 50);
-    };
-    const onHide = () => setKeyboardVisible(false);
-
-    const showSub = Keyboard.addListener(showEvent, onShow);
-    const hideSub = Keyboard.addListener(hideEvent, onHide);
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
+    }
+  }, [keyboardVisible]);
 
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -229,9 +216,7 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
     ...extra,
   });
 
-  const inputBottomPadding = keyboardVisible
-    ? Math.max(insets.bottom, 8)
-    : tabBarHeight + 8;
+  const inputBottomPadding = keyboardVisible ? 8 : tabBarHeight + 8;
 
   const sendQuery = async (query: string) => {
     if (!query.trim() || isLoading || !sessionReady) return;
@@ -397,11 +382,7 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-    >
+    <View style={styles.container}>
       <View style={[styles.topBar, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity
           onPress={async () => {
@@ -525,7 +506,10 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
           <Text style={styles.errorText}>{recordingError}</Text>
         ) : null}
       </View>
-    </KeyboardAvoidingView>
+      {Platform.OS === 'ios' && keyboardHeight > 0 ? (
+        <View style={{ height: keyboardHeight }} />
+      ) : null}
+    </View>
   );
 }
 

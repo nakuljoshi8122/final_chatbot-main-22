@@ -6,7 +6,8 @@ import {
   SELLER_CATEGORIES,
 } from '@/shared/theme/SellerTheme';
 import {
-  removeSellerProductFromApi,
+  permanentlyDeleteSellerProductOnApi,
+  softDeleteSellerProductOnApi,
   syncSellerProductToApi,
 } from '@/services/sellerSync';
 
@@ -26,6 +27,8 @@ export type InventoryItem = {
   quantity: number;
   status: InventoryStatus;
   imageUri?: string;
+  /** Extra local/remote photos for the same product. */
+  imageUris?: string[];
   createdAt: string;
   updatedAt: string;
   /** seed = from boutiqueSeed; seller = listed via add-product UI */
@@ -42,8 +45,9 @@ export type InventoryFormInput = {
   description: string;
   categoryNotes: string;
   quantity: number;
-  status: 'active' | 'draft';
+  status: InventoryStatus;
   imageUri?: string;
+  imageUris?: string[];
   storeId?: string;
 };
 
@@ -80,13 +84,21 @@ function seededQuantity(sku: string): number {
   return 8 + (hash % 40);
 }
 
+const SEED_SKUS = new Set(
+  (boutiqueSeed as SeedRow[]).map((r) => String(r.sku || '').toUpperCase()),
+);
+
+export function getSeedSkuSet(): Set<string> {
+  return SEED_SKUS;
+}
+
 function buildSeedItems(): InventoryItem[] {
   const now = new Date().toISOString();
   const items: InventoryItem[] = [];
   (boutiqueSeed as SeedRow[]).forEach((row, index) => {
     if (!isSellerCategory(row.category)) return;
     const status: InventoryStatus =
-      index % 11 === 0 ? 'draft' : index % 17 === 0 ? 'archive' : 'active';
+      index % 11 === 0 ? 'draft' : 'active';
     items.push({
       id: row.sku,
       sku: row.sku,
@@ -130,7 +142,9 @@ export async function persistPickedImage(sourceUri: string, skuHint?: string): P
 }
 
 async function readAll(): Promise<InventoryItem[]> {
-  if (memoryCache) return memoryCache;
+  if (memoryCache) {
+    return normalizeStatuses(mergeMissingSeeds(memoryCache));
+  }
 
   try {
     const path = inventoryPath();
@@ -139,8 +153,12 @@ async function readAll(): Promise<InventoryItem[]> {
       const raw = await FileSystem.readAsStringAsync(path);
       const parsed = JSON.parse(raw) as InventoryItem[];
       if (Array.isArray(parsed) && parsed.length > 0) {
-        memoryCache = parsed;
-        return parsed;
+        const merged = normalizeStatuses(mergeMissingSeeds(parsed));
+        memoryCache = merged;
+        if (merged.length !== parsed.length || merged.some((item, i) => item.status !== parsed[i]?.status)) {
+          await writeAll(merged);
+        }
+        return merged;
       }
     }
   } catch {
@@ -151,6 +169,34 @@ async function readAll(): Promise<InventoryItem[]> {
   memoryCache = seeded;
   await writeAll(seeded);
   return seeded;
+}
+
+/** Keep Pinterest/seed SKUs even after sellers add their own listings. */
+function mergeMissingSeeds(items: InventoryItem[]): InventoryItem[] {
+  const bySku = new Map(
+    items.map((item) => [item.sku.toUpperCase(), item] as const),
+  );
+  let changed = false;
+  for (const seed of buildSeedItems()) {
+    const key = seed.sku.toUpperCase();
+    if (!bySku.has(key)) {
+      bySku.set(key, seed);
+      changed = true;
+    }
+  }
+  if (!changed) return items;
+  return Array.from(bySku.values());
+}
+
+/** Drop legacy archive status (map to draft). */
+function normalizeStatuses(items: InventoryItem[]): InventoryItem[] {
+  let changed = false;
+  const next = items.map((item) => {
+    if ((item.status as string) !== 'archive') return item;
+    changed = true;
+    return { ...item, status: 'draft' as InventoryStatus };
+  });
+  return changed ? next : items;
 }
 
 async function writeAll(items: InventoryItem[]): Promise<void> {
@@ -198,13 +244,13 @@ export async function hydrateInventoryFromApi(row: {
     ? (row.category as SellerCategory)
     : 'Handicrafts';
   const statusRaw = String(row.status || 'active').toLowerCase();
+  // Legacy "archive" listings are treated as draft
   const status: InventoryStatus =
-    statusRaw === 'draft' ||
-    statusRaw === 'archive' ||
-    statusRaw === 'trash' ||
-    statusRaw === 'active'
-      ? statusRaw
-      : 'active';
+    statusRaw === 'draft' || statusRaw === 'archive'
+      ? 'draft'
+      : statusRaw === 'trash'
+        ? 'trash'
+        : 'active';
 
   const now = new Date().toISOString();
   const next: InventoryItem = {
@@ -220,7 +266,7 @@ export async function hydrateInventoryFromApi(row: {
     imageUri: row.img || productImageUrl(sku),
     createdAt: now,
     updatedAt: now,
-    source: 'seller',
+    source: SEED_SKUS.has(sku) ? 'seed' : 'seller',
     storeId: row.store_id || undefined,
   };
 
@@ -260,6 +306,15 @@ export async function createInventoryItem(
       `SKU "${sku}" already exists. Clear SKU to auto-generate, or pick a new one.`,
     );
   }
+  const imageUris = (input.imageUris || [])
+    .map(String)
+    .filter(Boolean);
+  const primary = input.imageUri || imageUris[0] || productImageUrl(sku);
+  const gallery = imageUris.length
+    ? imageUris[0] === primary
+      ? imageUris
+      : [primary, ...imageUris.filter((u) => u !== primary)]
+    : [primary];
   const item: InventoryItem = {
     id,
     sku,
@@ -270,7 +325,8 @@ export async function createInventoryItem(
     categoryNotes: input.categoryNotes.trim(),
     quantity: Math.max(0, Math.floor(input.quantity)),
     status: input.status,
-    imageUri: input.imageUri || productImageUrl(sku),
+    imageUri: primary,
+    imageUris: gallery,
     createdAt: now,
     updatedAt: now,
     source: 'seller',
@@ -278,7 +334,8 @@ export async function createInventoryItem(
   };
   items.unshift(item);
   await writeAll(items);
-  void syncSellerProductToApi(item, { forceRetag: true });
+  // upsert on API also updates visibility status for this SKU
+  await syncSellerProductToApi(item, { forceRetag: true });
   return item;
 }
 
@@ -311,7 +368,8 @@ export async function updateInventoryItem(
   };
   items[index] = updated;
   await writeAll(items);
-  void syncSellerProductToApi(updated);
+  // Await so Draft→Active is committed before the edit screen navigates back
+  await syncSellerProductToApi(updated);
   return updated;
 }
 
@@ -320,7 +378,7 @@ export async function setItemStatus(
   status: InventoryStatus,
 ): Promise<InventoryItem | null> {
   const items = await readAll();
-  const index = items.findIndex((item) => item.id === id);
+  const index = items.findIndex((item) => item.id === id || item.sku === id);
   if (index < 0) return null;
   items[index] = {
     ...items[index],
@@ -329,15 +387,64 @@ export async function setItemStatus(
   };
   await writeAll(items);
   const updated = items[index];
-  if (status === 'trash') {
-    void removeSellerProductFromApi(updated.sku);
-  } else {
-    void syncSellerProductToApi(updated);
-  }
+  // Soft-delete keeps the API row (status=trash) so Trash tab still lists it
+  await syncSellerProductToApi(updated);
   void import('@/services/sellerSync').then(({ syncInventoryVisibilityToApi }) =>
     syncInventoryVisibilityToApi(items),
   );
   return updated;
+}
+
+/** Confirm-friendly delete: marks trash and keeps the listing for Restore. */
+export async function deleteInventoryItem(id: string): Promise<boolean> {
+  const existing = await getInventoryItem(id);
+  if (!existing) {
+    await softDeleteSellerProductOnApi(id);
+    return true;
+  }
+  const updated = await setItemStatus(existing.id, 'trash');
+  return !!updated;
+}
+
+/** Restore a trashed item back to Active. */
+export async function restoreInventoryItem(id: string): Promise<InventoryItem | null> {
+  return setItemStatus(id, 'active');
+}
+
+/**
+ * Permanently erase a product: local row, API row, image, and seed visibility.
+ * Cannot be undone.
+ */
+export async function permanentlyDeleteInventoryItem(id: string): Promise<boolean> {
+  const items = await readAll();
+  const index = items.findIndex(
+    (item) => item.id === id || item.sku === id || item.sku.toUpperCase() === id.toUpperCase(),
+  );
+  const sku =
+    index >= 0 ? items[index].sku : String(id || '').trim().toUpperCase();
+  if (!sku) return false;
+
+  if (index >= 0) {
+    const removed = items[index];
+    items.splice(index, 1);
+    await writeAll(items);
+    // Best-effort: remove locally cached photo
+    if (removed.imageUri && !/^https?:\/\//i.test(removed.imageUri)) {
+      try {
+        await FileSystem.deleteAsync(removed.imageUri, { idempotent: true });
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  // Purge on API first (marks visibility purged), then sync remaining items
+  await permanentlyDeleteSellerProductOnApi(sku);
+  const remaining = await readAll();
+  void import('@/services/sellerSync').then(({ syncInventoryVisibilityToApi }) =>
+    syncInventoryVisibilityToApi(remaining),
+  );
+  return true;
 }
 
 export async function setItemQuantity(
@@ -356,12 +463,6 @@ export async function setItemQuantity(
   const updated = items[index];
   void syncSellerProductToApi(updated);
   return updated;
-}
-
-const SEED_SKUS = new Set((boutiqueSeed as SeedRow[]).map((r) => r.sku));
-
-export function getSeedSkuSet(): Set<string> {
-  return SEED_SKUS;
 }
 
 /** One-shot push of local inventory so chat can find it (AI tags on server). */

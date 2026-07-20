@@ -18,14 +18,20 @@ import { TileProduct } from '@/shared/utils/parseTiles';
 interface ProductTileCardProps {
   product: TileProduct;
   onSelect?: (product: TileProduct) => void;
+  /** When provided, replaces the default open behavior (e.g. seller enlarge modal). */
+  onPressOverride?: (product: TileProduct) => void;
 }
 
-export default function ProductTileCard({ product, onSelect }: ProductTileCardProps) {
+export default function ProductTileCard({ product, onSelect, onPressOverride }: ProductTileCardProps) {
   const router = useRouter();
   const [pressed, setPressed] = useState(false);
   const [imgError, setImgError] = useState(false);
 
   const openProduct = async () => {
+    if (onPressOverride) {
+      onPressOverride(product);
+      return;
+    }
     onSelect?.(product);
 
     if (product.id && !product.id.startsWith('tile-')) {
@@ -111,11 +117,13 @@ interface ProductTileGridProps {
   showMore?: boolean;
   onShowMore?: () => void;
   onTileSelect?: (product: TileProduct) => void;
+  /** When provided, replaces the default open behavior for every tile. */
+  onTilePressOverride?: (product: TileProduct) => void;
 }
 
 const TILE_WIDTH = 168;
 
-export function ProductTileGrid({ tiles, showMore = false, onShowMore, onTileSelect }: ProductTileGridProps) {
+export function ProductTileGrid({ tiles, showMore = false, onShowMore, onTileSelect, onTilePressOverride }: ProductTileGridProps) {
   if (!tiles.length) return null;
 
   return (
@@ -129,7 +137,11 @@ export function ProductTileGrid({ tiles, showMore = false, onShowMore, onTileSel
       >
         {tiles.map((tile) => (
           <View key={tile.id} style={styles.tileSlot}>
-            <ProductTileCard product={tile} onSelect={onTileSelect} />
+            <ProductTileCard
+              product={tile}
+              onSelect={onTileSelect}
+              onPressOverride={onTilePressOverride}
+            />
           </View>
         ))}
         {showMore && onShowMore ? (

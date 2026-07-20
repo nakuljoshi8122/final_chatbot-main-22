@@ -10,6 +10,12 @@ export interface TileProduct {
   url: string;
   img: string;
   icon?: string;
+  /** Seller inventory extras (present on seller-chat tiles). */
+  sku?: string;
+  status?: string;
+  quantity?: number;
+  /** Extra product photos for gallery swipe. */
+  images?: string[];
 }
 
 export interface ChatTable {
@@ -71,9 +77,22 @@ function resolveTileImg(t: Record<string, unknown>, name: string): string {
   return placeholderImg(name);
 }
 
+function resolveTileImages(t: Record<string, unknown>, name: string): string[] {
+  const primary = resolveTileImg(t, name);
+  const extras = Array.isArray(t.images)
+    ? t.images.map(String).filter(Boolean).map(rewriteProductImageHost)
+    : [];
+  const out: string[] = [];
+  for (const u of [primary, ...extras]) {
+    if (u && !out.includes(u)) out.push(u);
+  }
+  return out;
+}
+
 function tileFromEntry(t: Record<string, unknown>, i: number): TileProduct | null {
   if (!t?.name) return null;
   const name = String(t.name);
+  const images = resolveTileImages(t, name);
   return {
     id: String(t.id || `tile-${i}`),
     name,
@@ -87,8 +106,15 @@ function tileFromEntry(t: Record<string, unknown>, i: number): TileProduct | nul
       t.url ||
         `https://shopassist.local/${encodeURIComponent(name.toLowerCase().replace(/\s+/g, '-'))}`,
     ),
-    img: resolveTileImg(t, name),
+    img: images[0] || resolveTileImg(t, name),
+    images,
     icon: t.icon ? String(t.icon) : undefined,
+    sku: t.sku ? String(t.sku) : undefined,
+    status: t.status ? String(t.status) : undefined,
+    quantity:
+      t.quantity !== undefined && t.quantity !== null && !Number.isNaN(Number(t.quantity))
+        ? Number(t.quantity)
+        : undefined,
   };
 }
 

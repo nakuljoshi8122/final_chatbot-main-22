@@ -334,11 +334,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-from api.routes import core, seller, stores
+from api.routes import core, seller, stores, cart
 
 app.include_router(core.router)
 app.include_router(seller.router)
 app.include_router(stores.router)
+app.include_router(cart.router)
 
 _PRODUCT_IMAGES_DIR = PRODUCT_IMAGES_DIR
 _PRODUCT_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
@@ -598,8 +599,24 @@ async def ask(query: UserQuery, background_tasks: BackgroundTasks):
             pass
         
         response_text = ""
+        captured_tiles_block = ""
         logger.info("🔄 [ASK] Starting agent processing...")
         async for event in active_runner.run_async(user_id=user_id, session_id=session_id, new_message=user_message):
+            # Capture <TILES> emitted by tools (e.g. seller list_my_inventory) so we can
+            # re-attach them even if the LLM drops the block from its final text.
+            try:
+                fn_responses = event.get_function_responses() or []
+                for fr in fn_responses:
+                    resp = getattr(fr, "response", None)
+                    if isinstance(resp, dict):
+                        resp_text = str(resp.get("result", resp.get("output", resp)))
+                    else:
+                        resp_text = str(resp or "")
+                    m = re.search(r"<TILES>.*?</TILES>", resp_text, re.S)
+                    if m:
+                        captured_tiles_block = m.group(0)
+            except Exception:
+                pass
             if event.is_final_response() and event.content and event.content.parts:
                 response_text = event.content.parts[0].text
                 logger.info(f"✅ [ASK] Agent response: '{response_text}'")
@@ -618,8 +635,19 @@ async def ask(query: UserQuery, background_tasks: BackgroundTasks):
             )
             update_session_from_response(session_id, response_text)
         elif (query.role or "").lower() == "seller":
-            # Seller ops replies are plain text (no buyer TILES)
+            # Seller replies may include product cards from list_my_inventory. If the
+            # model dropped the tool's <TILES> block, re-attach it so the app renders cards.
             tile_meta = {}
+            if captured_tiles_block:
+                # The model may echo the tiles itself, but with max_output_tokens it often
+                # truncates the JSON (no closing </TILES>). Always strip any model-emitted
+                # tiles and append the complete block captured from the tool output.
+                cleaned = re.sub(r"<TILES>.*?</TILES>", "", response_text or "", flags=re.S)
+                cleaned = re.sub(r"<TILES>.*$", "", cleaned, flags=re.S)  # truncated/unclosed
+                cleaned = cleaned.strip()
+                response_text = (
+                    f"{cleaned}\n{captured_tiles_block}" if cleaned else captured_tiles_block
+                )
         else:
             try:
                 from commerce.boutique_response import sanitize_boutique_response

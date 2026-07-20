@@ -35,10 +35,27 @@ async def retag_seller_products(force: bool = True):
 
 
 @router.delete("/seller/products/{sku}")
-async def remove_seller_product(sku: str):
-    from catalog.seller_catalog import delete_seller_product
+async def remove_seller_product(sku: str, permanent: bool = False, store_id: str | None = None):
+    """Soft-delete (trash) by default. Pass permanent=true to purge entirely."""
+    from catalog.seller_catalog import purge_seller_product, soft_delete_seller_product
 
-    return {"ok": delete_seller_product(sku), "sku": sku}
+    if permanent:
+        return purge_seller_product(sku)
+    row = soft_delete_seller_product(sku, store_id or "")
+    return {"ok": True, "sku": sku, "status": "trash", "product": row}
+
+
+@router.post("/seller/product-from-image")
+async def product_from_image(body: dict):
+    """Vision: guess product name + description from an uploaded photo."""
+    from catalog.product_vision_guess import guess_product_from_image
+
+    image_base64 = ""
+    category_hint = ""
+    if isinstance(body, dict):
+        image_base64 = str(body.get("image_base64") or "")
+        category_hint = str(body.get("category") or "")
+    return guess_product_from_image(image_base64, category_hint=category_hint)
 
 
 @router.post("/shop/inventory-visibility")
