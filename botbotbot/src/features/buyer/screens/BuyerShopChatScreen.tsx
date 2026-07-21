@@ -29,6 +29,13 @@ import { useCart } from '@/contexts/CartContext';
 import { ThemedText } from '@/shared/ui/ThemedText';
 import TypingDots from '@/shared/ui/TypingDots';
 import { useKeyboardHeight } from '@/shared/hooks/useKeyboardHeight';
+import BuyerNotifyFab from '@/features/buyer/components/BuyerNotifyFab';
+import {
+  buildBuyerAlerts,
+  fetchBuyerInbox,
+  type BuyerAlert,
+} from '@/services/buyerNotifyApi';
+import { fetchStoreProducts, type ApiSellerProduct } from '@/services/storesApi';
 
 function categoryTag(category: string): string {
   const c = (category || '').toLowerCase();
@@ -46,7 +53,7 @@ export default function BuyerShopChatScreen() {
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardHeight();
   const { selectedStore, stores } = useApp();
-  const { count: cartCount } = useCart();
+  const { count: cartCount, cart } = useCart();
   const store =
     selectedStore?.id === storeId
       ? selectedStore
@@ -59,6 +66,8 @@ export default function BuyerShopChatScreen() {
   const [sessionReady, setSessionReady] = useState(false);
   const [selectedTile, setSelectedTile] = useState<ShelfProduct | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [buyerAlerts, setBuyerAlerts] = useState<BuyerAlert[]>([]);
+  const [storeProducts, setStoreProducts] = useState<ApiSellerProduct[]>([]);
   const scrollRef = useRef<ScrollView>(null);
   const sessionKey = `buyer_${storeId}`;
 
@@ -70,6 +79,7 @@ export default function BuyerShopChatScreen() {
       sku,
       name: t.name,
       price: t.price,
+      list_price: t.list_price,
       img: t.img,
       images,
       url: t.url,
@@ -131,6 +141,54 @@ export default function BuyerShopChatScreen() {
       cancelled = true;
     };
   }, [storeId, sessionKey, store?.name]);
+
+  useEffect(() => {
+    if (!sessionReady || !storeId) return;
+    let cancelled = false;
+    (async () => {
+      const [inbox, products] = await Promise.all([
+        fetchBuyerInbox(),
+        fetchStoreProducts(String(storeId), true),
+      ]);
+      if (cancelled) return;
+      setStoreProducts(products);
+      setBuyerAlerts(
+        buildBuyerAlerts({
+          storeId: String(storeId),
+          inbox,
+          products,
+          cartItems: cart.items,
+        }),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionReady, storeId, cart.items]);
+
+  const openAlertProduct = (alert: BuyerAlert) => {
+    const sku = String(alert.sku || '').toUpperCase();
+    if (!sku) return;
+    const p = storeProducts.find((row) => String(row.sku || '').toUpperCase() === sku);
+    if (!p) return;
+    const images = (p.images || []).map(String).filter(Boolean);
+    if (p.img && !images.includes(p.img)) images.unshift(p.img);
+    setSelectedTile({
+      sku: p.sku,
+      name: p.name,
+      price: p.price,
+      list_price: p.list_price,
+      img: p.img,
+      images,
+      url: p.url,
+      category: p.category,
+      description: p.description,
+      quantity: p.quantity ?? 0,
+      status: p.status,
+      store_id: String(storeId),
+    });
+    setModalOpen(true);
+  };
 
   const send = async () => {
     const q = inputText.trim();
@@ -298,6 +356,16 @@ export default function BuyerShopChatScreen() {
           setSelectedTile(null);
         }}
       />
+
+      {sessionReady ? (
+        <BuyerNotifyFab
+          storeId={String(storeId)}
+          storeName={store?.name}
+          alerts={buyerAlerts}
+          bottomOffset={keyboardHeight > 0 ? keyboardHeight - 40 : 0}
+          onAlertPress={openAlertProduct}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

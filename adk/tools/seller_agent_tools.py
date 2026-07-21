@@ -68,6 +68,7 @@ def _row_to_tile(row: dict[str, Any]) -> dict[str, Any]:
         "sku": sku,
         "name": str(row.get("name") or sku),
         "price": _format_price(row.get("price")),
+        "list_price": _format_price(row.get("list_price")) if row.get("list_price") else "",
         "category": str(row.get("category") or ""),
         "description": str(row.get("description") or "")[:220],
         "status": status,
@@ -128,6 +129,179 @@ async def list_my_inventory(store_id: str = "", status: str = "all", query: str 
     label = f"“{query}”" if q else f"{len(rows)}{scope} item" + ("s" if len(rows) != 1 else "")
     summary = f"Here " + ("is" if len(shown) == 1 else "are") + f" your {label}. Tap a card to view details or edit."
     return summary + "\n" + _tiles_block(shown)
+
+
+async def find_similar_inventory_from_photo(
+    store_id: str = "",
+    session_id: str = "",
+) -> str:
+    """Find inventory items that look like a photo the seller uploaded in chat.
+
+    Matches by product TYPE (shirt, jeans, serum…) and visible features — NOT the
+    exact guessed product title. Use this when the seller asks "do I have this?",
+    "anything like this?", or "similar in my inventory?" with a photo.
+
+    Args:
+        store_id: Store id from SYSTEM NOTE.
+        session_id: Chat session_id from SYSTEM NOTE (required for pending photo).
+
+    Returns:
+        Summary + <TILES> block of similar catalog items, or a clear no-match message.
+    """
+    sid, err = _store_id_or_error(store_id)
+    if err:
+        return err
+    sess = str(session_id or "").strip()
+    if not sess:
+        return "Error: session_id is required to read the uploaded photo."
+
+    try:
+        try:
+            from media.chat_image_stash import (
+                load_pending_chat_image_b64,
+                load_pending_vision_analysis,
+            )
+        except ImportError:
+            from media.chat_image_stash import (
+                load_pending_chat_image_b64,
+                load_pending_vision_analysis,
+            )
+        try:
+            from catalog.product_vision_guess import guess_product_from_image
+        except ImportError:
+            from catalog.product_vision_guess import guess_product_from_image
+        try:
+            from catalog.inventory_similarity import find_similar_inventory_rows
+        except ImportError:
+            from catalog.inventory_similarity import find_similar_inventory_rows
+        try:
+            from stores.store_registry import get_store
+        except ImportError:
+            from stores.store_registry import get_store
+    except ImportError as e:
+        return f"Error: similarity search unavailable ({e})."
+
+    vision = load_pending_vision_analysis(sess)
+    if not vision or not vision.get("product_type"):
+        image_b64 = load_pending_chat_image_b64(sess)
+        if not image_b64:
+            return (
+                "No pending photo found for this chat. Ask the seller to re-send the image."
+            )
+        shop = get_store(sid) or {}
+        hint = str(shop.get("category") or "")
+        vision = guess_product_from_image(image_b64, category_hint=hint)
+        if not vision.get("ok"):
+            return (
+                "Could not analyze the photo. Try a clearer image or describe the item."
+            )
+
+    product_type = str(vision.get("product_type") or "item").strip()
+    rows = [
+        r
+        for r in list_seller_products(active_only=False, store_id=sid)
+        if str(r.get("status") or "active").lower() == "active"
+    ]
+    matches = find_similar_inventory_rows(rows, vision)
+
+    if not matches:
+        type_label = product_type or "that type"
+        return (
+            f"No similar {type_label} items in your active inventory. "
+            "Want to list this as a new product?"
+        )
+
+    matched_rows = [r for _, r in matches]
+    n = len(matched_rows)
+    type_label = product_type or "item"
+    traits = vision.get("search_keywords") or []
+    trait_hint = f" ({', '.join(traits[:3])})" if traits else ""
+    summary = (
+        f"Found {n} similar {type_label}{'s' if n != 1 else ''} in your catalog{trait_hint}. "
+        "Tap a card to compare."
+    )
+    return summary + "\n" + _tiles_block(matched_rows)
+
+
+async def get_restock_priorities(store_id: str = "") -> str:
+    """Rank which SKUs to restock first (waitlist, sold-out, low stock).
+
+    Use when seller asks what to restock, priorities, or what needs attention first.
+    """
+    sid, err = _store_id_or_error(store_id)
+    if err:
+        return err
+    try:
+        from commerce.seller_ai import compute_restock_priorities
+    except ImportError:
+        from adk.commerce.seller_ai import compute_restock_priorities  # type: ignore
+    items = compute_restock_priorities(sid)
+    if not items:
+        return "Nothing urgent to restock right now."
+    lines = [f"Restock priorities for your store:"]
+    for i, it in enumerate(items[:5], 1):
+        lines.append(f"{i}. {it['name']} — {it.get('reason', '')} (qty {it.get('quantity', 0)})")
+    skus = [it["sku"] for it in items[:5] if it.get("sku")]
+    rows = [get_seller_product(s) for s in skus]
+    rows = [r for r in rows if r]
+    if rows:
+        return "\n".join(lines) + "\n" + _tiles_block(rows)
+    return "\n".join(lines)
+
+
+async def suggest_pricing_for_item(store_id: str = "", sku: str = "") -> str:
+    """AI pricing suggestion for one SKU based on category average and stock."""
+    sid, err = _store_id_or_error(store_id)
+    if err:
+        return err
+    key = str(sku or "").strip().upper()
+    if not key:
+        return "Error: sku is required."
+    try:
+        from commerce.seller_ai import suggest_pricing
+    except ImportError:
+        from adk.commerce.seller_ai import suggest_pricing  # type: ignore
+    out = suggest_pricing(sid, key)
+    if not out.get("ok"):
+        return str(out.get("error") or "Could not suggest price.")
+    return (
+        f"{out.get('rationale')} "
+        f"Current ${out.get('current_price')} → suggest ${out.get('suggested_price')} "
+        f"(category avg ${out.get('category_average')})."
+    )
+
+
+async def analyze_buyer_questions(store_id: str = "") -> str:
+    """Summarize themes in buyer questions (shipping, sizing, stock, pricing)."""
+    sid, err = _store_id_or_error(store_id)
+    if err:
+        return err
+    try:
+        from commerce.seller_ai import analyze_buyer_intent
+    except ImportError:
+        from adk.commerce.seller_ai import analyze_buyer_intent  # type: ignore
+    out = analyze_buyer_intent(sid)
+    themes = out.get("themes") or []
+    if not themes:
+        return f"No question themes yet ({out.get('open_count', 0)} open). {out.get('tip', '')}"
+    parts = [f"{t['label']} ({t['count']})" for t in themes[:4]]
+    return f"Buyer question themes: {', '.join(parts)}. Tip: {out.get('tip', '')}"
+
+
+async def ask_store_analytics(store_id: str = "", question: str = "") -> str:
+    """Answer business questions: top sellers, drafts, low stock, what to focus on."""
+    sid, err = _store_id_or_error(store_id)
+    if err:
+        return err
+    q = str(question or "").strip()
+    if not q:
+        return "Error: ask a question like 'what sold best?' or 'what should I restock?'"
+    try:
+        from commerce.seller_ai import answer_store_analytics
+    except ImportError:
+        from adk.commerce.seller_ai import answer_store_analytics  # type: ignore
+    out = answer_store_analytics(sid, q)
+    return str(out.get("answer") or "No analytics available yet.")
 
 
 def _qty_of(row: dict[str, Any]) -> int:
@@ -357,6 +531,9 @@ async def update_inventory_field(
         payload["category"] = normalize_category(value)
     elif field == "status":
         payload["status"] = str(value).strip().lower()
+    elif field == "price":
+        payload["price"] = str(value).strip()
+        payload.pop("list_price", None)
     else:
         payload[field] = str(value).strip()
 

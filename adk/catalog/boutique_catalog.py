@@ -22,7 +22,7 @@ _CAT_RE = re.compile(r"Category:\s*([^|]+)", re.IGNORECASE)
 
 
 def _public_base() -> str:
-    return (os.getenv("API_PUBLIC_URL") or os.getenv("EXPO_PUBLIC_API_URL") or "http://127.0.0.1:8000").rstrip("/")
+    return (os.getenv("API_PUBLIC_URL") or os.getenv("EXPO_PUBLIC_API_URL") or "http://127.0.0.1:8000").strip().rstrip("/")
 
 
 def parse_kb_products(kb_path: Path = KB_PATH) -> list[dict[str, Any]]:
@@ -171,8 +171,9 @@ def products_with_images() -> list[dict[str, Any]]:
 def tile_for_sku(sku: str) -> Optional[dict[str, Any]]:
     for p in products_with_images():
         if p["sku"].upper() == sku.upper():
-            return {
+            tile = {
                 "id": p["id"],
+                "sku": p.get("sku") or str(p.get("id") or "").replace("tile-", ""),
                 "name": p["name"],
                 "price": p["price"],
                 "category": p.get("category"),
@@ -182,23 +183,44 @@ def tile_for_sku(sku: str) -> Optional[dict[str, Any]]:
                 "url": p["url"],
                 "img": p["img"],
             }
+            if p.get("list_price"):
+                tile["list_price"] = p["list_price"]
+            if p.get("images"):
+                tile["images"] = p["images"]
+            if p.get("quantity") is not None:
+                tile["quantity"] = p["quantity"]
+            if p.get("status"):
+                tile["status"] = p["status"]
+            if p.get("store_id"):
+                tile["store_id"] = p["store_id"]
+            return tile
     return None
 
 
 def format_tiles_block(tiles: list[dict[str, Any]]) -> str:
     payload = []
     for t in tiles:
-        payload.append(
-            {
-                "id": t.get("id"),
-                "name": t.get("name"),
-                "price": t.get("price") or "",
-                "category": t.get("category") or "",
-                "description": t.get("description") or "",
-                "features": t.get("features") or [],
-                "tag": t.get("tag") or "",
-                "url": t.get("url") or "",
-                "img": t.get("img") or "",
-            }
-        )
+        entry = {
+            "id": t.get("id"),
+            "sku": t.get("sku") or "",
+            "name": t.get("name"),
+            "price": t.get("price") or "",
+            "category": t.get("category") or "",
+            "description": t.get("description") or "",
+            "features": t.get("features") or [],
+            "tag": t.get("tag") or "",
+            "url": t.get("url") or "",
+            "img": t.get("img") or "",
+        }
+        if t.get("list_price"):
+            entry["list_price"] = t.get("list_price")
+        if t.get("images"):
+            entry["images"] = t.get("images")
+        if t.get("quantity") is not None:
+            entry["quantity"] = t.get("quantity")
+        if t.get("status"):
+            entry["status"] = t.get("status")
+        if t.get("store_id"):
+            entry["store_id"] = t.get("store_id")
+        payload.append(entry)
     return f"<TILES>{json.dumps(payload, ensure_ascii=False)}</TILES>"

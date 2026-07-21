@@ -18,12 +18,16 @@ Look at the image and return ONLY valid JSON (no markdown):
   "name": "short retail product title, Title Case, 2-6 words",
   "description": "1-2 friendly listing sentences for shoppers",
   "category": "one of: Handicrafts | Apparel | Skincare",
+  "product_type": "single core noun for what this IS, e.g. shirt, jeans, scarf, serum, mug",
+  "search_keywords": ["up to 8 traits: color, material, style, pattern, sleeve, fit — lowercase"],
   "generalized": true
 }
 
 Rules:
 - Prefer a clear, sellable name. If brand/model is unclear, use a generalized name
   (e.g. "Ceramic Mug", "Cotton T-Shirt", "Vitamin C Serum", "Woven Basket").
+- product_type must be the broad inventory category noun (shirt not "casual button-up shirt").
+- search_keywords: visible traits only — color, fabric, collar, sleeve length, pattern, etc.
 - Do NOT invent fake brand names or SKUs.
 - Description should mention visible material/color/use when obvious; stay generic if not.
 - Match category to what the item IS (clothes → Apparel, beauty → Skincare, craft/home → Handicrafts).
@@ -156,11 +160,28 @@ def guess_product_from_image(
         if not description:
             description = f"{name} ready to list. Edit details as needed."
 
+        product_type = str(parsed.get("product_type") or "").strip().lower()
+        if not product_type:
+            # Derive from name tokens
+            for token in re.findall(r"[a-z]+", name.lower()):
+                if token in (
+                    "shirt", "jeans", "pants", "dress", "scarf", "serum", "mug",
+                    "basket", "candle", "bag", "shoe", "skirt", "jacket", "cream",
+                ):
+                    product_type = token
+                    break
+        keywords_raw = parsed.get("search_keywords")
+        search_keywords: list[str] = []
+        if isinstance(keywords_raw, list):
+            search_keywords = [str(k).strip().lower() for k in keywords_raw if str(k).strip()]
+
         return {
             "ok": True,
             "name": name,
             "description": description,
             "category": category,
+            "product_type": product_type,
+            "search_keywords": search_keywords,
             "generalized": bool(parsed.get("generalized", True)),
             "source": "vision",
         }

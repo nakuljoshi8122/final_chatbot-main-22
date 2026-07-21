@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 function sessionKey(storeId?: string | null): string {
-  return storeId ? `@chat_session_${storeId}` : '@shopassist_chat_session_id';
+  return storeId ? `@chat_session_${storeId}` : '@chat_session_id';
 }
 
 export async function loadStoredSessionId(storeId?: string | null): Promise<string | null> {

@@ -20,7 +20,7 @@ async function imageToBase64(uri?: string): Promise<string | undefined> {
 
 export async function syncSellerProductToApi(
   item: InventoryItem,
-  opts?: { forceRetag?: boolean },
+  opts?: { forceRetag?: boolean; clearDiscount?: boolean },
 ): Promise<boolean> {
   try {
     const galleryUris = (item.imageUris?.length
@@ -42,6 +42,7 @@ export async function syncSellerProductToApi(
       name: item.name,
       category: item.category,
       price: item.price,
+      ...(item.listPrice ? { list_price: item.listPrice } : {}),
       description: item.description,
       category_notes: item.categoryNotes,
       quantity: item.quantity,
@@ -50,6 +51,7 @@ export async function syncSellerProductToApi(
       created_at: item.createdAt,
       updated_at: item.updatedAt,
       force_retag: !!opts?.forceRetag,
+      clear_discount: !!opts?.clearDiscount,
     };
     if (images_base64.length) {
       body.images_base64 = images_base64;

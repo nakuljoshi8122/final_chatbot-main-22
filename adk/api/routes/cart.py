@@ -96,8 +96,34 @@ async def notify_count_endpoint(sku: str):
 
 @router.post("/notify/broadcast")
 async def notify_broadcast_endpoint(body: dict):
-    """Seller marks restock notify as sent (clears waiting list for SKU)."""
+    """Seller notifies waitlist — AI message + buyer inbox when store_id provided."""
+    b = body or {}
+    sku = str(b.get("sku") or "")
+    store_id = str(b.get("store_id") or "")
+    if store_id:
+        from commerce.seller_ai import broadcast_restock_with_message
+
+        return broadcast_restock_with_message(sku, store_id=store_id)
     from commerce.buyer_cart import notify_broadcast
 
-    b = body or {}
-    return notify_broadcast(str(b.get("sku") or ""))
+    return notify_broadcast(sku)
+
+
+@router.get("/notify/inbox")
+async def notify_inbox_endpoint(buyer_id: str):
+    """Buyer restock / seller notification inbox."""
+    try:
+        from paths import DATA_DIR
+    except ImportError:
+        from adk.paths import DATA_DIR  # type: ignore
+    import json
+
+    path = DATA_DIR / "buyer_notifications.json"
+    if not path.exists():
+        return {"notifications": []}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        rows = list(data.get(str(buyer_id).strip()) or [])
+        return {"notifications": rows[:30]}
+    except Exception:
+        return {"notifications": []}

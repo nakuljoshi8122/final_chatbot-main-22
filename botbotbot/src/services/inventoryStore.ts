@@ -35,6 +35,8 @@ export type InventoryItem = {
   source?: 'seed' | 'seller';
   /** Shop this listing belongs to */
   storeId?: string;
+  /** Original price when a promo/discount is active. */
+  listPrice?: string;
 };
 
 export type InventoryFormInput = {
@@ -49,6 +51,8 @@ export type InventoryFormInput = {
   imageUri?: string;
   imageUris?: string[];
   storeId?: string;
+  /** A deliberate price edit removes the active promotion. */
+  clearDiscount?: boolean;
 };
 
 type SeedRow = {
@@ -259,6 +263,7 @@ export async function hydrateInventoryFromApi(row: {
     name: String(row.name || '').trim() || sku,
     category,
     price: String(row.price || '').trim(),
+    listPrice: row.list_price ? String(row.list_price).trim() : undefined,
     description: String(row.description || '').trim(),
     categoryNotes: String(row.category_notes || '').trim(),
     quantity: Math.max(0, Math.floor(Number(row.quantity) || 0)),
@@ -357,6 +362,7 @@ export async function updateInventoryItem(
     name: input.name.trim(),
     category: input.category,
     price: input.price.trim(),
+    listPrice: input.clearDiscount ? undefined : existing.listPrice,
     description: input.description.trim(),
     categoryNotes: input.categoryNotes.trim(),
     quantity: Math.max(0, Math.floor(input.quantity)),
@@ -369,7 +375,7 @@ export async function updateInventoryItem(
   items[index] = updated;
   await writeAll(items);
   // Await so Draft→Active is committed before the edit screen navigates back
-  await syncSellerProductToApi(updated);
+  await syncSellerProductToApi(updated, { clearDiscount: !!input.clearDiscount });
   return updated;
 }
 

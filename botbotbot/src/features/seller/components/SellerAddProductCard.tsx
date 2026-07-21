@@ -35,6 +35,7 @@ import { transcribeAudioFile } from '@/services/sttField';
 import { successHaptic, tapHaptic } from '@/shared/utils/sellerHaptics';
 import { fetchStoreProducts } from '@/services/storesApi';
 import { guessProductFromImage } from '@/services/visionGuessApi';
+import { fetchAiListingFromImage, fetchAiBatchPhotos } from '@/services/sellerAiApi';
 
 export type AddProductSummary = {
   sku: string;
@@ -114,6 +115,8 @@ export default function SellerAddProductCard({
   const [submitting, setSubmitting] = useState(false);
   const [listening, setListening] = useState<'name' | 'price' | null>(null);
   const [categoryAvgs, setCategoryAvgs] = useState<Record<string, number>>({});
+  const [batchAiTip, setBatchAiTip] = useState<string | null>(null);
+  const [aiListingReady, setAiListingReady] = useState(false);
   const draftHydrated = React.useRef(false);
   const visionForUri = React.useRef<string | null>(null);
   const { isRecording, startRecording, stopRecording, isInitialized } =
@@ -175,6 +178,13 @@ export default function SellerAddProductCard({
       cancelled = true;
     };
   }, [storeId, prefills, initialPhoto]);
+
+  useEffect(() => {
+    if (photoQueue.length >= 1 && photos.length >= 1) {
+      void analyzeBatchQueue();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoQueue.length, photos.length]);
 
   // Autosave draft (Tier 9)
   useEffect(() => {
@@ -245,6 +255,42 @@ export default function SellerAddProductCard({
     } finally {
       setAnalyzingPhoto(false);
     }
+  };
+
+  const aiAutoFillListing = async () => {
+    if (!photo?.base64) {
+      Alert.alert('Photo needed', 'Snap a photo first for AI auto-fill.');
+      return;
+    }
+    setAnalyzingPhoto(true);
+    const draft = await fetchAiListingFromImage(photo.base64, storeId, category);
+    setAnalyzingPhoto(false);
+    if (!draft?.ok) {
+      Alert.alert('AI fill', draft?.error || 'Could not analyze photo.');
+      return;
+    }
+    if (draft.name) setName(draft.name);
+    if (draft.description) {
+      setDescription(draft.description);
+      setShowMore(true);
+    }
+    if (draft.category) setCategory(normalizeCategory(String(draft.category)));
+    if (draft.suggested_price) setPrice(String(draft.suggested_price));
+    if (draft.suggested_quantity) setQuantity(String(draft.suggested_quantity));
+    setAiListingReady(true);
+    setVisionHint('AI filled all fields — review or one-tap list');
+    setStep(3);
+    successHaptic();
+  };
+
+  const analyzeBatchQueue = async () => {
+    const all = [...photos, ...photoQueue].filter((p) => p.base64);
+    if (all.length < 2) return;
+    const out = await fetchAiBatchPhotos(
+      all.map((p) => ({ base64: p.base64! })),
+      category,
+    );
+    if (out?.tip) setBatchAiTip(out.tip);
   };
 
   const applyPhotoGuess = (
@@ -551,7 +597,24 @@ export default function SellerAddProductCard({
           {photoQueue.length > 0 ? (
             <Text style={styles.queueHint}>
               {photoQueue.length} more products in batch queue
+              {batchAiTip ? `\n${batchAiTip}` : ''}
             </Text>
+          ) : null}
+          {photo?.base64 ? (
+            <TouchableOpacity
+              style={[styles.primaryBtn, { backgroundColor: '#2D5A87' }]}
+              onPress={() => void aiAutoFillListing()}
+              disabled={analyzingPhoto}
+            >
+              {analyzingPhoto ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="sparkles" size={18} color="#fff" />
+                  <Text style={styles.primaryText}>AI fill & review</Text>
+                </>
+              )}
+            </TouchableOpacity>
           ) : null}
           <TouchableOpacity
             style={styles.primaryBtn}
@@ -821,10 +884,15 @@ export default function SellerAddProductCard({
             ) : (
               <>
                 <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                <Text style={styles.primaryText}>List product</Text>
+                <Text style={styles.primaryText}>
+                  {aiListingReady ? 'One-tap list' : 'List product'}
+                </Text>
               </>
             )}
           </TouchableOpacity>
+          {aiListingReady ? (
+            <Text style={styles.hint}>AI pre-filled — tap to publish instantly.</Text>
+          ) : null}
           <TouchableOpacity onPress={() => setStep(2)}>
             <Text style={styles.moreLink}>Edit basics</Text>
           </TouchableOpacity>

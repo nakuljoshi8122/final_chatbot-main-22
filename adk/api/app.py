@@ -11,38 +11,19 @@ from dotenv import load_dotenv
 
 load_dotenv(ENV_FILE, override=True)
 
-# Switch agents via adk/.env — no code edits needed:
-#   AGENT_MODE=crm     → multi-store CRM / shop assistant (default; uses static_agent.py)
-#   AGENT_MODE=shopassist  → ShopAssist marketplace
-AGENT_MODE = os.getenv("AGENT_MODE", "crm").lower()
+# Boutique multi-store CRM / seller-buyer assistants (Postgres-backed sessions)
+AGENT_MODE = "crm"
 AGENT_USE_TOOLS = os.getenv("AGENT_USE_TOOLS", "false").lower() in ("1", "true", "yes")
 
-if AGENT_MODE == "shopassist":
-    try:
-        if AGENT_USE_TOOLS:
-            from agents.shopassist_agent import runner, session_service
-        else:
-            from agents.shopassist_static_agent import runner, session_service
-    except ImportError:
-        if AGENT_USE_TOOLS:
-            from agents.shopassist_agent import runner, session_service
-        else:
-            from agents.shopassist_static_agent import runner, session_service
-    APP_NAME = "shopassist_marketplace_app"
-    SELLER_APP_NAME = APP_NAME
-    SERVICE_LABEL = "shopassist_marketplace_chatbot"
-    seller_runner = runner
-    seller_session_service = session_service
-else:
-    try:
-        from agents.static_agent import runner, session_service
-        from agents.seller_agent import seller_runner, seller_session_service
-    except ImportError:
-        from agents.static_agent import runner, session_service
-        from agents.seller_agent import seller_runner, seller_session_service
-    APP_NAME = "enterprise_crm_app"
-    SELLER_APP_NAME = "seller_ops_app"
-    SERVICE_LABEL = "enterprise_crm_assistant"
+try:
+    from agents.static_agent import runner, session_service
+    from agents.seller_agent import seller_runner, seller_session_service
+except ImportError:
+    from agents.static_agent import runner, session_service
+    from agents.seller_agent import seller_runner, seller_session_service
+APP_NAME = "enterprise_crm_app"
+SELLER_APP_NAME = "seller_ops_app"
+SERVICE_LABEL = "enterprise_crm_assistant"
 
 try:
     from voice.whisper_utils import speech_to_text_whisper, text_to_speech_whisper, is_openai_configured
@@ -60,138 +41,43 @@ import re
 from typing import Optional
 
 try:
-    from commerce.product_matcher import get_product_by_id
-    from commerce.tile_validator import sanitize_shopassist_response, strip_agent_markup, normalize_agent_markup
-    from commerce.session_commerce import (
-        handle_commerce_query,
-        set_active_product,
-        update_session_from_response,
-    )
-    from commerce.upsell_policy import on_user_turn, apply_upsell_policy
-    from commerce.prior_items import try_describe_prior_items_response, prior_items_context_hint
-    from commerce.best_recommendation import (
-        try_best_recommendation_response,
-        best_recommendation_context_hint,
-    )
-    from commerce.conversation_context import (
-        try_referenced_product_response,
-        conversation_context_hint,
-    )
-    from commerce.browse_filters import filters_context_hint
-    from commerce.session_reset import reset_shopassist_session
-    from commerce.combo_handlers import try_show_and_describe_response
-    from commerce.comparison_handlers import try_comparison_response
-    from commerce.tile_validator import try_fast_browse_response
+    from commerce.agent_markup import strip_agent_markup
 except ImportError:
-    from commerce.product_matcher import get_product_by_id
-    from commerce.tile_validator import sanitize_shopassist_response, strip_agent_markup, normalize_agent_markup
-    from commerce.session_commerce import (
-        handle_commerce_query,
-        set_active_product,
-        update_session_from_response,
-    )
-    from commerce.upsell_policy import on_user_turn, apply_upsell_policy
-    from commerce.prior_items import try_describe_prior_items_response, prior_items_context_hint
-    from commerce.best_recommendation import (
-        try_best_recommendation_response,
-        best_recommendation_context_hint,
-    )
-    from commerce.conversation_context import (
-        try_referenced_product_response,
-        conversation_context_hint,
-    )
-    from commerce.browse_filters import filters_context_hint
-    from commerce.session_reset import reset_shopassist_session
-    from commerce.combo_handlers import try_show_and_describe_response
-    from commerce.comparison_handlers import try_comparison_response
-    from commerce.tile_validator import try_fast_browse_response
+    from commerce.agent_markup import strip_agent_markup
 
 try:
-    from commerce.session_commerce import session_active_product
     from persistence.session_store import SessionHistory, hydrate_session_state, append_message, load_messages
 except ImportError:
-    from commerce.session_commerce import session_active_product
     from persistence.session_store import SessionHistory, hydrate_session_state, append_message, load_messages
 
 # Postgres-backed conversation memory (survives server restarts)
 conversation_history = SessionHistory()
 
-RETURNING_RE = re.compile(
-    r"\b(i'?m\s+back|im\s+back|hey\s+again|hello\s+again|back\s+again|we'?re\s+back)\b",
-    re.IGNORECASE,
-)
-
-
-def _inject_shopassist_query_context(
-    session_id: str,
-    query: str,
-    conversation_history: dict,
-) -> str:
-    """Mode hints + anti-repeat list for the agent."""
-    try:
-        from commerce.product_matcher import needs_full_information, get_discussed_product_names
-    except ImportError:
-        from commerce.product_matcher import needs_full_information, get_discussed_product_names
-
-    hints: list[str] = []
-    if needs_full_information(query):
-        hints.append(
-            "[Response mode: FULL INFO — one handoff line, then table or short answer. "
-            "Never silent tables/tiles.]"
-        )
-    else:
-        hints.append(
-            "[Response mode: SUMMARY — one handoff line before any TILES or TABLE, "
-            "then shortest answer. Never dump visuals with zero text above.]"
-        )
-
-    discussed = get_discussed_product_names(conversation_history, session_id)
-    if discussed:
-        hints.append(
-            "[Already described — name only, never re-describe: "
-            + ", ".join(discussed)
-            + "]"
-        )
-
-    prior_hint = prior_items_context_hint(conversation_history, session_id)
-    if prior_hint:
-        hints.append(prior_hint)
-
-    best_hint = best_recommendation_context_hint(query)
-    if best_hint:
-        hints.append(best_hint)
-
-    try:
-        from commerce.tile_validator import session_last_browse_query
-    except ImportError:
-        from commerce.tile_validator import session_last_browse_query
-
-    ctx_hint = conversation_context_hint(
-        session_id,
-        query,
-        conversation_history,
-        session_last_browse=session_last_browse_query,
-    )
-    if ctx_hint:
-        hints.append(ctx_hint)
-
-    filter_hint = filters_context_hint(session_id)
-    if filter_hint:
-        hints.append(filter_hint)
-
-    active = session_active_product.get(session_id)
-    if active:
-        hints.append(
-            f"[Active product: {active.get('name', '')} — do not ask which item]"
-        )
-
-    return "\n".join(hints) + "\n" + query
-
 
 def _inject_active_product_context(session_id: str, query: str) -> str:
-    if AGENT_MODE != "shopassist":
-        return query
-    return _inject_shopassist_query_context(session_id, query, conversation_history)
+    return query
+
+
+def _store_category_hint(store: str | None, store_id: str | None) -> str:
+    """Map store tag / shop record to vision category hint."""
+    try:
+        try:
+            from stores.store_registry import get_store
+        except ImportError:
+            from stores.store_registry import get_store
+        shop = get_store(store_id) if store_id else None
+        if shop:
+            cat = str(shop.get("category") or "").strip()
+            if cat in ("Handicrafts", "Apparel", "Skincare"):
+                return cat
+        s = (store or "").lower()
+        if "skin" in s:
+            return "Skincare"
+        if "apparel" in s:
+            return "Apparel"
+    except Exception:
+        pass
+    return "Handicrafts"
 
 
 def _inject_crm_session_id(
@@ -334,12 +220,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-from api.routes import core, seller, stores, cart
+from api.routes import core, seller, stores, cart, seller_ai
 
 app.include_router(core.router)
 app.include_router(seller.router)
 app.include_router(stores.router)
 app.include_router(cart.router)
+app.include_router(seller_ai.router)
 
 _PRODUCT_IMAGES_DIR = PRODUCT_IMAGES_DIR
 _PRODUCT_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
@@ -417,120 +304,6 @@ async def ask(query: UserQuery, background_tasks: BackgroundTasks):
         # CRM writes run after the response so they never share ADK's OTEL context
         background_tasks.add_task(_crm_log_inbound, session_id, query.query)
 
-        if AGENT_MODE == "shopassist":
-            if RETURNING_RE.search(query.query or ""):
-                reset_shopassist_session(session_id, conversation_history)
-                answer = "Welcome back — what you looking for?"
-                background_tasks.add_task(_crm_log_outbound, session_id, answer)
-                return {
-                    "answer": answer,
-                    "session_id": session_id,
-                    "tile_meta": {"has_more": False},
-                }
-
-            on_user_turn(session_id, query.query, conversation_history)
-            commerce = handle_commerce_query(query.query, session_id, conversation_history)
-            if commerce.handled:
-                add_to_conversation(session_id, "user", query.query)
-                add_to_conversation(session_id, "assistant", commerce.response_text)
-                result = {
-                    "answer": commerce.response_text,
-                    "session_id": session_id,
-                    "tile_meta": {"has_more": False},
-                }
-                if commerce.show_checkout:
-                    result["commerce_meta"] = {
-                        "show_checkout": True,
-                        "checkout_url": commerce.checkout_url,
-                    }
-                background_tasks.add_task(_crm_log_outbound, session_id, commerce.response_text)
-                return result
-
-            combo_resp = try_show_and_describe_response(
-                query.query, session_id, conversation_history
-            )
-            if combo_resp:
-                add_to_conversation(session_id, "user", query.query)
-                add_to_conversation(session_id, "assistant", combo_resp)
-                update_session_from_response(session_id, combo_resp)
-                background_tasks.add_task(_crm_log_outbound, session_id, combo_resp)
-                return {
-                    "answer": combo_resp,
-                    "session_id": session_id,
-                    "tile_meta": {"has_more": False},
-                }
-
-            compare_resp = try_comparison_response(
-                query.query, session_id, conversation_history
-            )
-            if compare_resp:
-                add_to_conversation(session_id, "user", query.query)
-                add_to_conversation(session_id, "assistant", compare_resp)
-                update_session_from_response(session_id, compare_resp)
-                background_tasks.add_task(_crm_log_outbound, session_id, compare_resp)
-                return {
-                    "answer": compare_resp,
-                    "session_id": session_id,
-                    "tile_meta": {"has_more": False},
-                }
-
-            fast = try_fast_browse_response(
-                query.query, session_id, conversation_history
-            )
-            if fast:
-                fast_text, fast_meta = fast
-                add_to_conversation(session_id, "user", query.query)
-                add_to_conversation(session_id, "assistant", fast_text)
-                update_session_from_response(session_id, fast_text)
-                background_tasks.add_task(_crm_log_outbound, session_id, fast_text)
-                return {
-                    "answer": fast_text,
-                    "session_id": session_id,
-                    "tile_meta": fast_meta,
-                }
-
-            ref_resp = try_referenced_product_response(
-                query.query, session_id, conversation_history
-            )
-            if ref_resp:
-                add_to_conversation(session_id, "user", query.query)
-                add_to_conversation(session_id, "assistant", ref_resp)
-                update_session_from_response(session_id, ref_resp)
-                background_tasks.add_task(_crm_log_outbound, session_id, ref_resp)
-                return {
-                    "answer": ref_resp,
-                    "session_id": session_id,
-                    "tile_meta": {"has_more": False},
-                }
-
-            best_resp = try_best_recommendation_response(
-                query.query, session_id, conversation_history
-            )
-            if best_resp:
-                add_to_conversation(session_id, "user", query.query)
-                add_to_conversation(session_id, "assistant", best_resp)
-                update_session_from_response(session_id, best_resp)
-                background_tasks.add_task(_crm_log_outbound, session_id, best_resp)
-                return {
-                    "answer": best_resp,
-                    "session_id": session_id,
-                    "tile_meta": {"has_more": False},
-                }
-
-            prior_resp = try_describe_prior_items_response(
-                query.query, session_id, conversation_history
-            )
-            if prior_resp:
-                add_to_conversation(session_id, "user", query.query)
-                add_to_conversation(session_id, "assistant", prior_resp)
-                update_session_from_response(session_id, prior_resp)
-                background_tasks.add_task(_crm_log_outbound, session_id, prior_resp)
-                return {
-                    "answer": prior_resp,
-                    "session_id": session_id,
-                    "tile_meta": {"has_more": False},
-                }
-
         # Build LLM payload with full persisted conversation
         try:
             from persistence.session_store import build_llm_history_block
@@ -542,40 +315,74 @@ async def ask(query: UserQuery, background_tasks: BackgroundTasks):
             contextual_query = _inject_active_product_context(session_id, history_payload)
         else:
             contextual_query = _inject_active_product_context(session_id, query.query)
-        if AGENT_MODE != "shopassist":
-            image_note = None
-            if query.image_base64 and query.role == "seller":
+        image_note = None
+        if query.image_base64 and query.role == "seller":
+            try:
+                try:
+                    from media.chat_image_stash import save_pending_chat_image
+                except ImportError:
+                    from media.chat_image_stash import save_pending_chat_image
+                saved = save_pending_chat_image(session_id, query.image_base64)
+                vision_line = ""
                 try:
                     try:
-                        from media.chat_image_stash import save_pending_chat_image
+                        from catalog.product_vision_guess import guess_product_from_image
                     except ImportError:
-                        from media.chat_image_stash import save_pending_chat_image
-                    saved = save_pending_chat_image(session_id, query.image_base64)
-                    if saved:
-                        image_note = (
-                            "A product photo was uploaded with this message and saved as a "
-                            "pending chat image. When calling upsert_inventory_item, set "
-                            "use_pending_chat_image='true' and pass session_id from this SYSTEM NOTE. "
-                            "Do NOT paste or invent image_base64."
-                        )
-                    else:
-                        image_note = (
-                            "Seller tried to upload a photo but it could not be saved. "
-                            "Ask them to retry with another image or use the List form."
-                        )
-                except Exception as e:
-                    logger.warning("Pending chat image save failed: %s", e)
-                    image_note = (
-                        "Photo upload failed on the server. Ask the seller to retry."
+                        from catalog.product_vision_guess import guess_product_from_image
+                    hint = _store_category_hint(query.store, query.store_id)
+                    vision = guess_product_from_image(
+                        query.image_base64, category_hint=hint
                     )
-            contextual_query = _inject_crm_session_id(
-                session_id,
-                contextual_query,
-                query.store,
-                store_id=query.store_id,
-                role=query.role,
-                image_note=image_note,
-            )
+                    if vision.get("ok") and vision.get("name"):
+                        ptype = vision.get("product_type") or ""
+                        kws = vision.get("search_keywords") or []
+                        kw_str = ", ".join(kws[:6]) if kws else ""
+                        vision_line = (
+                            f' Vision analysis: type="{ptype or "unknown"}"'
+                            f' traits=[{kw_str}] title="{vision["name"]}". '
+                            "For inventory questions about the photo (do I have this?, "
+                            "similar item?, in stock?), call find_similar_inventory_from_photo "
+                            f"with session_id — NOT list_my_inventory with the title. "
+                            "For listing, use upsert_inventory_item with "
+                            "use_pending_chat_image='true'."
+                        )
+                        try:
+                            try:
+                                from media.chat_image_stash import save_pending_vision_analysis
+                            except ImportError:
+                                from media.chat_image_stash import save_pending_vision_analysis
+                            save_pending_vision_analysis(session_id, vision)
+                        except Exception:
+                            pass
+                except Exception as ve:
+                    logger.warning("Vision analysis for chat image failed: %s", ve)
+                if saved:
+                    image_note = (
+                        "A product photo was uploaded with this message and saved as a "
+                        "pending chat image."
+                        f"{vision_line} "
+                        "When calling upsert_inventory_item, set "
+                        "use_pending_chat_image='true' and pass session_id from this SYSTEM NOTE. "
+                        "Do NOT paste or invent image_base64."
+                    )
+                else:
+                    image_note = (
+                        "Seller tried to upload a photo but it could not be saved. "
+                        "Ask them to retry with another image or use the List form."
+                    )
+            except Exception as e:
+                logger.warning("Pending chat image save failed: %s", e)
+                image_note = (
+                    "Photo upload failed on the server. Ask the seller to retry."
+                )
+        contextual_query = _inject_crm_session_id(
+            session_id,
+            contextual_query,
+            query.store,
+            store_id=query.store_id,
+            role=query.role,
+            image_note=image_note,
+        )
 
         logger.info(f"💬 [ASK] History turns loaded for session: {session_id}")
         logger.info(f"🤖 [ASK] Sending contextual query to agent: {contextual_query[:100]}...")
@@ -584,7 +391,7 @@ async def ask(query: UserQuery, background_tasks: BackgroundTasks):
         active_runner = runner
         active_sessions = session_service
         active_app = APP_NAME
-        if AGENT_MODE != "shopassist" and (query.role or "").lower() == "seller":
+        if (query.role or "").lower() == "seller":
             active_runner = seller_runner
             active_sessions = seller_session_service
             active_app = SELLER_APP_NAME
@@ -622,19 +429,7 @@ async def ask(query: UserQuery, background_tasks: BackgroundTasks):
                 logger.info(f"✅ [ASK] Agent response: '{response_text}'")
                 # Do not break — early cancel of ADK's async generator leaks OTEL context
 
-        if AGENT_MODE == "shopassist":
-            response_text, tile_meta = sanitize_shopassist_response(
-                response_text,
-                query.query,
-                session_id,
-                conversation_history,
-            )
-            response_text = normalize_agent_markup(response_text)
-            response_text = apply_upsell_policy(
-                response_text, query.query, session_id, conversation_history
-            )
-            update_session_from_response(session_id, response_text)
-        elif (query.role or "").lower() == "seller":
+        if (query.role or "").lower() == "seller":
             # Seller replies may include product cards from list_my_inventory. If the
             # model dropped the tool's <TILES> block, re-attach it so the app renders cards.
             tile_meta = {}
@@ -708,8 +503,6 @@ async def ask(query: UserQuery, background_tasks: BackgroundTasks):
         
         logger.info(f"🎯 [ASK] Returning response: '{response_text[:100]}...'")
         result = {"answer": response_text, "session_id": session_id}
-        if AGENT_MODE == "shopassist":
-            result["tile_meta"] = tile_meta
         return result
     
     except Exception as e:
@@ -800,167 +593,6 @@ async def ask_voice(
             # CRM writes run after the response so they never share ADK's OTEL context
             background_tasks.add_task(_crm_log_inbound, session_id, transcribed_text)
 
-            if AGENT_MODE == "shopassist":
-                if RETURNING_RE.search(transcribed_text or ""):
-                    reset_shopassist_session(session_id, conversation_history)
-                    answer = "Welcome back — what you looking for?"
-                    result = {
-                        "answer": answer,
-                        "session_id": session_id,
-                        "transcribed_text": transcribed_text,
-                        "tile_meta": {"has_more": False},
-                    }
-                    if return_audio and is_openai_configured():
-                        result["audio_response"] = text_to_speech_whisper(
-                            answer, voice="alloy"
-                        )
-                    background_tasks.add_task(_crm_log_outbound, session_id, answer)
-                    return result
-
-                on_user_turn(session_id, transcribed_text, conversation_history)
-                commerce = handle_commerce_query(transcribed_text, session_id, conversation_history)
-                if commerce.handled:
-                    add_to_conversation(session_id, "user", transcribed_text)
-                    add_to_conversation(session_id, "assistant", commerce.response_text)
-                    result = {
-                        "answer": commerce.response_text,
-                        "session_id": session_id,
-                        "transcribed_text": transcribed_text,
-                        "tile_meta": {"has_more": False},
-                    }
-                    if commerce.show_checkout:
-                        result["commerce_meta"] = {
-                            "show_checkout": True,
-                            "checkout_url": commerce.checkout_url,
-                        }
-                    if return_audio and is_openai_configured():
-                        result["audio_response"] = text_to_speech_whisper(
-                            strip_agent_markup(commerce.response_text), voice="alloy"
-                        )
-                    background_tasks.add_task(_crm_log_outbound, session_id, commerce.response_text)
-                    return result
-
-                combo_resp = try_show_and_describe_response(
-                    transcribed_text, session_id, conversation_history
-                )
-                if combo_resp:
-                    add_to_conversation(session_id, "user", transcribed_text)
-                    add_to_conversation(session_id, "assistant", combo_resp)
-                    update_session_from_response(session_id, combo_resp)
-                    result = {
-                        "answer": combo_resp,
-                        "session_id": session_id,
-                        "transcribed_text": transcribed_text,
-                        "tile_meta": {"has_more": False},
-                    }
-                    if return_audio and is_openai_configured():
-                        result["audio_response"] = text_to_speech_whisper(
-                            strip_agent_markup(combo_resp), voice="alloy"
-                        )
-                    background_tasks.add_task(_crm_log_outbound, session_id, combo_resp)
-                    return result
-
-                compare_resp = try_comparison_response(
-                    transcribed_text, session_id, conversation_history
-                )
-                if compare_resp:
-                    add_to_conversation(session_id, "user", transcribed_text)
-                    add_to_conversation(session_id, "assistant", compare_resp)
-                    update_session_from_response(session_id, compare_resp)
-                    result = {
-                        "answer": compare_resp,
-                        "session_id": session_id,
-                        "transcribed_text": transcribed_text,
-                        "tile_meta": {"has_more": False},
-                    }
-                    if return_audio and is_openai_configured():
-                        result["audio_response"] = text_to_speech_whisper(
-                            strip_agent_markup(compare_resp), voice="alloy"
-                        )
-                    background_tasks.add_task(_crm_log_outbound, session_id, compare_resp)
-                    return result
-
-                fast = try_fast_browse_response(
-                    transcribed_text, session_id, conversation_history
-                )
-                if fast:
-                    fast_text, fast_meta = fast
-                    add_to_conversation(session_id, "user", transcribed_text)
-                    add_to_conversation(session_id, "assistant", fast_text)
-                    update_session_from_response(session_id, fast_text)
-                    result = {
-                        "answer": fast_text,
-                        "session_id": session_id,
-                        "transcribed_text": transcribed_text,
-                        "tile_meta": fast_meta,
-                    }
-                    if return_audio and is_openai_configured():
-                        result["audio_response"] = text_to_speech_whisper(
-                            strip_agent_markup(fast_text), voice="alloy"
-                        )
-                    background_tasks.add_task(_crm_log_outbound, session_id, fast_text)
-                    return result
-
-                ref_resp = try_referenced_product_response(
-                    transcribed_text, session_id, conversation_history
-                )
-                if ref_resp:
-                    add_to_conversation(session_id, "user", transcribed_text)
-                    add_to_conversation(session_id, "assistant", ref_resp)
-                    update_session_from_response(session_id, ref_resp)
-                    result = {
-                        "answer": ref_resp,
-                        "session_id": session_id,
-                        "transcribed_text": transcribed_text,
-                        "tile_meta": {"has_more": False},
-                    }
-                    if return_audio and is_openai_configured():
-                        result["audio_response"] = text_to_speech_whisper(
-                            strip_agent_markup(ref_resp), voice="alloy"
-                        )
-                    background_tasks.add_task(_crm_log_outbound, session_id, ref_resp)
-                    return result
-
-                best_resp = try_best_recommendation_response(
-                    transcribed_text, session_id, conversation_history
-                )
-                if best_resp:
-                    add_to_conversation(session_id, "user", transcribed_text)
-                    add_to_conversation(session_id, "assistant", best_resp)
-                    update_session_from_response(session_id, best_resp)
-                    result = {
-                        "answer": best_resp,
-                        "session_id": session_id,
-                        "transcribed_text": transcribed_text,
-                        "tile_meta": {"has_more": False},
-                    }
-                    if return_audio and is_openai_configured():
-                        result["audio_response"] = text_to_speech_whisper(
-                            strip_agent_markup(best_resp), voice="alloy"
-                        )
-                    background_tasks.add_task(_crm_log_outbound, session_id, best_resp)
-                    return result
-
-                prior_resp = try_describe_prior_items_response(
-                    transcribed_text, session_id, conversation_history
-                )
-                if prior_resp:
-                    add_to_conversation(session_id, "user", transcribed_text)
-                    add_to_conversation(session_id, "assistant", prior_resp)
-                    update_session_from_response(session_id, prior_resp)
-                    result = {
-                        "answer": prior_resp,
-                        "session_id": session_id,
-                        "transcribed_text": transcribed_text,
-                        "tile_meta": {"has_more": False},
-                    }
-                    if return_audio and is_openai_configured():
-                        result["audio_response"] = text_to_speech_whisper(
-                            strip_agent_markup(prior_resp), voice="alloy"
-                        )
-                    background_tasks.add_task(_crm_log_outbound, session_id, prior_resp)
-                    return result
-            
             try:
                 from persistence.session_store import build_llm_history_block
             except ImportError:
@@ -971,8 +603,7 @@ async def ask_voice(
                 contextual_query = _inject_active_product_context(session_id, history_payload)
             else:
                 contextual_query = _inject_active_product_context(session_id, transcribed_text)
-            if AGENT_MODE != "shopassist":
-                contextual_query = _inject_crm_session_id(session_id, contextual_query, store)
+            contextual_query = _inject_crm_session_id(session_id, contextual_query, store)
 
             logger.info(f"💬 [VOICE] History turns loaded for session: {session_id}")
             logger.info(f"🎤 [VOICE] Sending contextual query to agent: {contextual_query[:100]}...")
@@ -991,25 +622,12 @@ async def ask_voice(
                     response_text = event.content.parts[0].text
                     # Do not break — early cancel of ADK's async generator leaks OTEL context
 
-            if AGENT_MODE == "shopassist":
-                response_text, tile_meta = sanitize_shopassist_response(
-                    response_text,
-                    transcribed_text,
-                    session_id,
-                    conversation_history,
-                )
-                response_text = normalize_agent_markup(response_text)
-                response_text = apply_upsell_policy(
-                    response_text, transcribed_text, session_id, conversation_history
-                )
-                update_session_from_response(session_id, response_text)
-            else:
-                try:
-                    from commerce.boutique_response import sanitize_boutique_response
-                except ImportError:
-                    from commerce.boutique_response import sanitize_boutique_response
-                response_text = sanitize_boutique_response(response_text, transcribed_text, store=store)
-                tile_meta = {}
+            try:
+                from commerce.boutique_response import sanitize_boutique_response
+            except ImportError:
+                from commerce.boutique_response import sanitize_boutique_response
+            response_text = sanitize_boutique_response(response_text, transcribed_text, store=store)
+            tile_meta = {}
             
             # Generate audio response using OpenAI TTS
             audio_response = None
@@ -1040,8 +658,6 @@ async def ask_voice(
                 "transcribed_text": transcribed_text,
                 "audio_response": audio_response,
             }
-            if AGENT_MODE == "shopassist":
-                result["tile_meta"] = tile_meta
             return result
                 
         finally:

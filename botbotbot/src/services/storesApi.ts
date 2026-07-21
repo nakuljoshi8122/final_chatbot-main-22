@@ -1,4 +1,4 @@
-import { API_BASE, fetchWithTimeout } from '@/services/apiBase';
+import { API_BASE, fetchWithTimeout, normalizeProductImages } from '@/services/apiBase';
 
 export type StoreCategory = 'Skincare' | 'Apparel' | 'Handicrafts';
 
@@ -113,21 +113,6 @@ export async function answerStoreQuery(
   }
 }
 
-export async function fetchStoreProducts(storeId: string, activeOnly = false) {
-  try {
-    const res = await fetchWithTimeout(
-      `${API_BASE}/seller/products?store_id=${encodeURIComponent(storeId)}&active_only=${activeOnly}`,
-      undefined,
-      5000,
-    );
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data.products) ? data.products : [];
-  } catch {
-    return [];
-  }
-}
-
 export type ApiSellerProduct = {
   sku: string;
   name: string;
@@ -141,7 +126,24 @@ export type ApiSellerProduct = {
   images?: string[];
   url?: string;
   store_id?: string;
+  list_price?: string;
 };
+
+export async function fetchStoreProducts(storeId: string, activeOnly = false) {
+  try {
+    const res = await fetchWithTimeout(
+      `${API_BASE}/seller/products?store_id=${encodeURIComponent(storeId)}&active_only=${activeOnly}`,
+      undefined,
+      5000,
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    const products = Array.isArray(data.products) ? data.products : [];
+    return products.map((p: ApiSellerProduct) => normalizeProductImages(p));
+  } catch {
+    return [];
+  }
+}
 
 export async function fetchSellerProduct(
   sku: string,
@@ -156,7 +158,8 @@ export async function fetchSellerProduct(
     const data = await res.json();
     const products: ApiSellerProduct[] = Array.isArray(data.products) ? data.products : [];
     const key = sku.trim().toUpperCase();
-    return products.find((p) => String(p.sku || '').toUpperCase() === key) || null;
+    const match = products.find((p) => String(p.sku || '').toUpperCase() === key) || null;
+    return match ? normalizeProductImages(match) : null;
   } catch {
     return null;
   }

@@ -45,8 +45,9 @@ import {
 } from '@/services/sellerLazyStore';
 import { patchSellerProduct } from '@/services/patchSellerProduct';
 import UndoToast from '@/shared/ui/UndoToast';
-import SellerMorningBrief from '@/features/seller/components/SellerMorningBrief';
+import SellerAiBriefFab from '@/features/seller/components/SellerAiBriefFab';
 import { fetchStoreProducts, fetchStoreQueries } from '@/services/storesApi';
+import { fetchAiMorningBrief } from '@/services/sellerAiApi';
 import { tapHaptic, successHaptic } from '@/shared/utils/sellerHaptics';
 import { useRouter } from 'expo-router';
 
@@ -72,6 +73,10 @@ type SellerMsg = {
   formPrefill?: Partial<LastListedProduct>;
   formQueue?: { uri: string; base64?: string }[];
   formKey?: string;
+  /** Bot prompt after photo upload: list vs agent query. */
+  photoChoice?: boolean;
+  photoChoiceResolved?: boolean;
+  photoChoiceUserMsgId?: string;
 };
 
 type QuickAction = {
@@ -109,6 +114,9 @@ const QUICK_ACTIONS: QuickAction[] = [
     message: 'Publish all my draft items to active',
     icon: 'checkmark-done-outline',
   },
+  { label: 'Restock AI', message: 'What should I restock first?', icon: 'trending-up-outline' },
+  { label: 'Top sellers', message: 'What sold best in my store?', icon: 'stats-chart-outline' },
+  { label: 'Buyer themes', message: 'Summarize buyer question themes', icon: 'people-outline' },
 ];
 
 /** ChatGPT-style starter tiles — short labels, zero essay. */
@@ -225,15 +233,22 @@ export default function SellerChatInterface({
   const [pendingImage, setPendingImage] = useState<{ uri: string; base64: string } | null>(
     null,
   );
+  /** User bubble that already shows the photo — avoid duplicating on send/list. */
+  const [photoUserMsgId, setPhotoUserMsgId] = useState<string | null>(null);
   const [selectedTile, setSelectedTile] = useState<TileProduct | null>(null);
   const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(
     null,
   );
   const [brief, setBrief] = useState({ lowStock: 0, drafts: 0, queries: 0 });
+  const [aiNarrative, setAiNarrative] = useState('');
+  const [aiPriorities, setAiPriorities] = useState<
+    { sku: string; name: string; reason: string }[]
+  >([]);
   const [doneToday, setDoneToday] = useState<DoneToday>({});
   const [movers, setMovers] = useState<{ name: string; count: number }[]>([]);
   const [smartStarters, setSmartStarters] = useState(STARTER_SUGGESTIONS);
   const scrollRef = useRef<ScrollView>(null);
+  const inputRef = useRef<TextInput>(null);
   const tileAnims = useRef(STARTER_SUGGESTIONS.map(() => new Animated.Value(1))).current;
   const starterExiting = useRef(false);
   const autoOpenedRef = useRef(false);
@@ -303,7 +318,10 @@ export default function SellerChatInterface({
     void persistLocal(storeId, sessionId, messages);
   }, [messages, sessionId, storeId, sessionReady]);
 
-  const pickImage = async (fromCamera = false) => {
+  const pickImage = async (
+    fromCamera = false,
+    opts?: { directList?: boolean },
+  ) => {
     const perm = fromCamera
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -342,25 +360,101 @@ export default function SellerChatInterface({
       Alert.alert('Error', 'Could not encode image.');
       return;
     }
-    // Camera / gallery for listing → open form immediately (lazy path)
-    openAddProductForm(
-      fromCamera ? 'Snap & list' : 'List this from the photo',
-      { uri: asset.uri, base64 },
-    );
+    const photo = { uri: asset.uri, base64 };
+    if (opts?.directList) {
+      openAddProductForm(
+        fromCamera ? 'Snap & list' : 'List this from the photo',
+        photo,
+      );
+      return;
+    }
+    showPhotoChoice(photo, fromCamera);
+  };
+
+  const showPhotoChoice = (
+    photo: { uri: string; base64: string },
+    fromCamera = false,
+  ) => {
+    const userId = `u-${Date.now()}`;
+    const userMsg: SellerMsg = {
+      id: userId,
+      text: fromCamera ? 'Snap & list' : 'Shared a photo',
+      isUser: true,
+      timestamp: new Date().toISOString(),
+      imageUri: photo.uri,
+    };
+    const choiceMsg: SellerMsg = {
+      id: `choice-${Date.now() + 1}`,
+      text: 'What do you want to do with this image?',
+      isUser: false,
+      timestamp: new Date().toISOString(),
+      photoChoice: true,
+      formPhoto: photo,
+      photoChoiceUserMsgId: userId,
+    };
+    setPhotoUserMsgId(null);
+    setPendingImage(null);
+    setMessages((prev) => {
+      const next = [...prev, userMsg, choiceMsg];
+      void persistLocal(storeId, sessionId, next);
+      return next;
+    });
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+  };
+
+  const resolvePhotoChoice = (choiceMsgId: string) => {
+    setMessages((prev) => {
+      const next = prev.map((msg) =>
+        msg.id === choiceMsgId ? { ...msg, photoChoiceResolved: true } : msg,
+      );
+      void persistLocal(storeId, sessionId, next);
+      return next;
+    });
+  };
+
+  const handlePhotoChoiceList = (
+    photo: { uri: string; base64?: string },
+    choiceMsgId: string,
+    userMsgId: string,
+  ) => {
+    tapHaptic();
+    resolvePhotoChoice(choiceMsgId);
+    openAddProductForm('List this from the photo', photo, null, {
+      skipUserBubble: true,
+      existingUserMsgId: userMsgId,
+    });
+  };
+
+  const handlePhotoChoiceQuery = (
+    photo: { uri: string; base64?: string },
+    choiceMsgId: string,
+    userMsgId: string,
+  ) => {
+    tapHaptic();
+    setPendingImage({ uri: photo.uri, base64: photo.base64 || '' });
+    setPhotoUserMsgId(userMsgId);
+    setMessages((prev) => {
+      const next = prev.map((msg) =>
+        msg.id === choiceMsgId
+          ? {
+              ...msg,
+              photoChoiceResolved: true,
+              text: 'Type your question below — your photo is attached.',
+            }
+          : msg,
+      );
+      void persistLocal(storeId, sessionId, next);
+      return next;
+    });
+    setTimeout(() => inputRef.current?.focus(), 100);
   };
 
   const openAddProductForm = (
     userLabel = 'I wanna add a product',
     photo?: { uri: string; base64?: string } | null,
     prefill?: Partial<LastListedProduct> | null,
+    opts?: { skipUserBubble?: boolean; existingUserMsgId?: string },
   ) => {
-    const userMsg: SellerMsg = {
-      id: `u-${Date.now()}`,
-      text: photo ? userLabel : userLabel,
-      isUser: true,
-      timestamp: new Date().toISOString(),
-      imageUri: photo?.uri,
-    };
     const formMsg: SellerMsg = {
       id: `form-${Date.now() + 1}`,
       text: photo
@@ -375,10 +469,26 @@ export default function SellerChatInterface({
       formPrefill: prefill || undefined,
     };
     setMessages((prev) => {
-      const next = [...prev, userMsg, formMsg];
+      let next = prev;
+      if (opts?.skipUserBubble && opts.existingUserMsgId) {
+        next = prev.map((msg) =>
+          msg.id === opts.existingUserMsgId ? { ...msg, text: userLabel } : msg,
+        );
+      } else {
+        const userMsg: SellerMsg = {
+          id: `u-${Date.now()}`,
+          text: userLabel,
+          isUser: true,
+          timestamp: new Date().toISOString(),
+          imageUri: photo?.uri,
+        };
+        next = [...prev, userMsg];
+      }
+      next = [...next, formMsg];
       void persistLocal(storeId, sessionId, next);
       return next;
     });
+    if (opts?.existingUserMsgId) setPhotoUserMsgId(null);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
   };
 
@@ -477,41 +587,58 @@ export default function SellerChatInterface({
     if (!sessionReady) return;
     let cancelled = false;
     (async () => {
-      const [products, queries, done, top] = await Promise.all([
-        fetchStoreProducts(storeId, false),
-        fetchStoreQueries(storeId, 'open'),
-        loadDoneToday(storeId),
-        loadTopMovers(storeId, 3),
-      ]);
-      if (cancelled) return;
-      const low = products.filter(
-        (p: { status?: string; quantity?: number }) =>
-          String(p.status || 'active').toLowerCase() === 'active' &&
-          (p.quantity ?? 0) < 3,
-      ).length;
-      const drafts = products.filter(
-        (p: { status?: string }) => String(p.status || '').toLowerCase() === 'draft',
-      ).length;
-      setBrief({ lowStock: low, drafts, queries: queries.length });
-      setDoneToday(done);
-      setMovers(top);
+      try {
+        const [products, queries, done, top] = await Promise.all([
+          fetchStoreProducts(storeId, false),
+          fetchStoreQueries(storeId, 'open'),
+          loadDoneToday(storeId),
+          loadTopMovers(storeId, 3),
+        ]);
+        if (cancelled) return;
+        const low = products.filter(
+          (p: { status?: string; quantity?: number }) =>
+            String(p.status || 'active').toLowerCase() === 'active' &&
+            (p.quantity ?? 0) < 3,
+        ).length;
+        const drafts = products.filter(
+          (p: { status?: string }) => String(p.status || '').toLowerCase() === 'draft',
+        ).length;
+        setBrief({ lowStock: low, drafts, queries: queries.length });
+        setDoneToday(done);
+        setMovers(top);
 
-      // Smart starters: put the urgent job first
-      const base = [...STARTER_SUGGESTIONS];
-      if (low > 0 && !done.lowStock) {
-        const idx = base.findIndex((s) => s.message.includes('low on stock'));
-        if (idx > 0) {
-          const [item] = base.splice(idx, 1);
-          base.unshift({ ...item, label: 'Restock low' });
+        const aiBrief = await fetchAiMorningBrief(storeId);
+        if (!cancelled && aiBrief?.narrative) {
+          setAiNarrative(aiBrief.narrative);
+          setAiPriorities(aiBrief.priorities || []);
+          if (aiBrief.stats) {
+            setBrief({
+              lowStock: aiBrief.stats.lowStock ?? low,
+              drafts: aiBrief.stats.drafts ?? drafts,
+              queries: aiBrief.stats.queries ?? queries.length,
+            });
+          }
         }
-      } else if (drafts > 0 && !done.drafts) {
-        const idx = base.findIndex((s) => s.message.includes('draft'));
-        if (idx > 0) {
-          const [item] = base.splice(idx, 1);
-          base.unshift({ ...item, label: 'Publish drafts' });
+
+        // Smart starters: put the urgent job first
+        const base = [...STARTER_SUGGESTIONS];
+        if (low > 0 && !done.lowStock) {
+          const idx = base.findIndex((s) => s.message.includes('low on stock'));
+          if (idx > 0) {
+            const [item] = base.splice(idx, 1);
+            base.unshift({ ...item, label: 'Restock low' });
+          }
+        } else if (drafts > 0 && !done.drafts) {
+          const idx = base.findIndex((s) => s.message.includes('draft'));
+          if (idx > 0) {
+            const [item] = base.splice(idx, 1);
+            base.unshift({ ...item, label: 'Publish drafts' });
+          }
         }
+        setSmartStarters(base);
+      } catch {
+        // Keep seller chat usable if brief/stats loading fails.
       }
-      setSmartStarters(base);
     })();
     return () => {
       cancelled = true;
@@ -521,9 +648,10 @@ export default function SellerChatInterface({
   const send = async (overrideText?: string) => {
     const text = (overrideText ?? inputText).trim();
     if ((!text && !pendingImage) || isLoading || !sessionReady) return;
+    if (pendingImage && photoUserMsgId && !text) return;
 
     // Photo alone (or photo + "add") → field-tile form with photo prefilled.
-    if (pendingImage) {
+    if (pendingImage && !photoUserMsgId) {
       const wantsList =
         !text ||
         /^(list|add|create|upload|this|product)\b/i.test(text) ||
@@ -549,19 +677,35 @@ export default function SellerChatInterface({
       return;
     }
 
-    const display = text || 'Please help me list this product from the photo.';
+    const existingPhotoMsgId = photoUserMsgId;
+    const display =
+      text || (existingPhotoMsgId ? '' : 'Please help me list this product from the photo.');
+    if (!display) return;
+
     const imageUri = pendingImage?.uri;
     const imageB64 = pendingImage?.base64;
-    const userMsg: SellerMsg = {
-      id: Date.now().toString(),
-      text: display,
-      isUser: true,
-      timestamp: new Date().toISOString(),
-      imageUri,
-    };
-    setMessages((prev) => [...prev, userMsg]);
+
+    if (existingPhotoMsgId) {
+      setMessages((prev) =>
+        prev
+          .filter((msg) => !msg.photoChoice)
+          .map((msg) =>
+            msg.id === existingPhotoMsgId ? { ...msg, text: display } : msg,
+          ),
+      );
+    } else {
+      const userMsg: SellerMsg = {
+        id: Date.now().toString(),
+        text: display,
+        isUser: true,
+        timestamp: new Date().toISOString(),
+        imageUri,
+      };
+      setMessages((prev) => [...prev, userMsg]);
+    }
     setInputText('');
     setPendingImage(null);
+    setPhotoUserMsgId(null);
     setIsLoading(true);
 
     try {
@@ -623,7 +767,7 @@ export default function SellerChatInterface({
     ).start(() => {
       starterExiting.current = false;
       if (action.message === '__SNAP__') {
-        void pickImage(true);
+        void pickImage(true, { directList: true });
       } else if (action.message === '__SIMILAR__') {
         void openSimilar();
       } else if (action.openAddForm) {
@@ -649,6 +793,7 @@ export default function SellerChatInterface({
       // ignore
     }
     setPendingImage(null);
+    setPhotoUserMsgId(null);
   };
 
   return (
@@ -667,33 +812,6 @@ export default function SellerChatInterface({
 
       {sessionReady && messages.length === 0 ? (
         <View style={styles.emptyBody}>
-          {/* Ambient pulse — background only; gone once any chat text appears */}
-          <SellerMorningBrief
-            storeName={storeName}
-            stats={{
-              lowStock: brief.lowStock,
-              drafts: brief.drafts,
-              queries: brief.queries,
-              movers,
-            }}
-            done={doneToday}
-            onLowStock={() => {
-              void bumpStarterStat(storeId, 'Low stock');
-              void send('Which items are low on stock?');
-            }}
-            onDrafts={() => {
-              void bumpStarterStat(storeId, 'Drafts');
-              void send('Show my draft items');
-            }}
-            onQueries={() => router.push(`/seller/${storeId}/queries` as never)}
-            onDoneToday={async () => {
-              const next = { lowStock: true, drafts: true, queries: true };
-              setDoneToday(next);
-              await saveDoneToday(storeId, next);
-              successHaptic();
-              setToast({ message: 'Marked done for today ✓' });
-            }}
-          />
           <View style={styles.starterHeader}>
             <Text style={styles.starterTitle}>What do you need?</Text>
             <Text style={styles.starterSub}>One tap. No essays.</Text>
@@ -745,7 +863,39 @@ export default function SellerChatInterface({
       >
         {messages.map((m) => (
           <AnimatedRow key={m.id}>
-            {m.text || m.imageUri ? (
+            {!m.isUser && m.photoChoice ? (
+              <View style={[styles.bubble, styles.botBubble, styles.botAlign]}>
+                <Text style={styles.bubbleText}>{m.text}</Text>
+                {!m.photoChoiceResolved ? (
+                  <View style={styles.photoChoiceBtns}>
+                    <TouchableOpacity
+                      style={styles.photoChoiceBtn}
+                      onPress={() =>
+                        handlePhotoChoiceQuery(m.formPhoto!, m.id, m.photoChoiceUserMsgId!)
+                      }
+                      disabled={isLoading}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="chatbubble-ellipses-outline" size={16} color="#1D3557" />
+                      <Text style={styles.photoChoiceBtnText}>Query</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.photoChoiceBtn, styles.photoChoiceBtnPrimary]}
+                      onPress={() =>
+                        handlePhotoChoiceList(m.formPhoto!, m.id, m.photoChoiceUserMsgId!)
+                      }
+                      disabled={isLoading}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="pricetag-outline" size={16} color="#fff" />
+                      <Text style={[styles.photoChoiceBtnText, styles.photoChoiceBtnTextPrimary]}>
+                        List product
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </View>
+            ) : m.text || m.imageUri ? (
               <View
                 style={[
                   styles.bubble,
@@ -897,8 +1047,15 @@ export default function SellerChatInterface({
       {pendingImage ? (
         <View style={styles.previewRow}>
           <Image source={{ uri: pendingImage.uri }} style={styles.preview} />
-          <Text style={styles.previewLabel}>Photo ready to send</Text>
-          <TouchableOpacity onPress={() => setPendingImage(null)}>
+          <Text style={styles.previewLabel}>
+            {photoUserMsgId ? 'Photo attached — type your question' : 'Photo ready to send'}
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              setPendingImage(null);
+              setPhotoUserMsgId(null);
+            }}
+          >
             <Ionicons name="close-circle" size={22} color="#c00" />
           </TouchableOpacity>
         </View>
@@ -916,7 +1073,7 @@ export default function SellerChatInterface({
             key={qa.label}
             style={styles.quickChip}
             onPress={() => {
-              if (qa.message === '__SNAP__') void pickImage(true);
+              if (qa.message === '__SNAP__') void pickImage(true, { directList: true });
               else if (qa.message === '__SIMILAR__') void openSimilar();
               else if (qa.openAddForm) openAddProductForm(qa.message);
               else void send(qa.message);
@@ -944,10 +1101,15 @@ export default function SellerChatInterface({
           <Ionicons name="image-outline" size={22} color="#1D3557" />
         </TouchableOpacity>
         <TextInput
+          ref={inputRef}
           style={styles.input}
           value={inputText}
           onChangeText={setInputText}
-          placeholder="List a product, update price…"
+          placeholder={
+            photoUserMsgId
+              ? 'Ask about this photo…'
+              : 'List a product, update price…'
+          }
           placeholderTextColor="#999"
           multiline
           onFocus={() => {
@@ -965,6 +1127,7 @@ export default function SellerChatInterface({
       <SellerTileDetailModal
         product={selectedTile}
         storeId={storeId}
+        storeName={storeName}
         onClose={() => setSelectedTile(null)}
       />
       <UndoToast
@@ -972,6 +1135,38 @@ export default function SellerChatInterface({
         onUndo={toast?.undo}
         onDismiss={() => setToast(null)}
       />
+
+      {sessionReady ? (
+        <SellerAiBriefFab
+          storeId={storeId}
+          stats={{
+            lowStock: brief.lowStock,
+            drafts: brief.drafts,
+            queries: brief.queries,
+            movers,
+          }}
+          narrative={aiNarrative}
+          priorities={aiPriorities}
+          done={doneToday}
+          bottomOffset={keyboardHeight > 0 ? keyboardHeight - 40 : 0}
+          onLowStock={() => {
+            void bumpStarterStat(storeId, 'Low stock');
+            void send('Which items are low on stock?');
+          }}
+          onDrafts={() => {
+            void bumpStarterStat(storeId, 'Drafts');
+            void send('Show my draft items');
+          }}
+          onQueries={() => router.push(`/seller/${storeId}/queries` as never)}
+          onDoneToday={async () => {
+            const next = { lowStock: true, drafts: true, queries: true };
+            setDoneToday(next);
+            await saveDoneToday(storeId, next);
+            successHaptic();
+            setToast({ message: 'Marked done for today ✓' });
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -1020,7 +1215,7 @@ const styles = StyleSheet.create({
     color: '#111',
   },
   starterSub: { fontSize: 12.5, color: '#8A8A8A' },
-  starterList: { gap: 8 },
+  starterList: { gap: 8, paddingRight: 58 },
   starterTile: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1118,6 +1313,32 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   bulkChipText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+  photoChoiceBtns: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  photoChoiceBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: '#EEF2F7',
+  },
+  photoChoiceBtnPrimary: {
+    backgroundColor: '#1D3557',
+  },
+  photoChoiceBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1D3557',
+  },
+  photoChoiceBtnTextPrimary: {
+    color: '#fff',
+  },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',

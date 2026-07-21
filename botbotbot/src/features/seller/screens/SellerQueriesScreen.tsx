@@ -25,6 +25,9 @@ import {
   savePinnedReplies,
 } from '@/services/sellerLazyStore';
 import UndoToast from '@/shared/ui/UndoToast';
+import { fetchAiQueryDraft, translateReplyText, fetchAiBuyerIntent } from '@/services/sellerAiApi';
+
+const LANG_OPTIONS = ['', 'Hindi', 'Spanish', 'French'];
 
 export default function SellerQueriesScreen() {
   const { storeId } = useLocalSearchParams<{ storeId: string }>();
@@ -39,15 +42,20 @@ export default function SellerQueriesScreen() {
     message: string;
     undo?: () => void;
   } | null>(null);
+  const [aiLoading, setAiLoading] = useState<string | null>(null);
+  const [replyLang, setReplyLang] = useState('');
+  const [intentTip, setIntentTip] = useState('');
   const keyboardHeight = useKeyboardHeight();
 
   const load = useCallback(async () => {
-    const [rows, pins] = await Promise.all([
+    const [rows, pins, intent] = await Promise.all([
       fetchStoreQueries(String(storeId), 'open'),
       loadPinnedReplies(String(storeId)),
+      fetchAiBuyerIntent(String(storeId)),
     ]);
     setQueries(rows);
     setReplies(pins);
+    if (intent?.tip) setIntentTip(intent.tip);
     setLoading(false);
   }, [storeId]);
 
@@ -89,6 +97,36 @@ export default function SellerQueriesScreen() {
     void submit(q, text);
   };
 
+  const aiDraftReply = async (q: StoreQuery) => {
+    setAiLoading(q.id);
+    const out = await fetchAiQueryDraft(
+      String(storeId),
+      q.question,
+      q.notes || '',
+      replyLang,
+    );
+    setAiLoading(null);
+    if (out?.draft) {
+      setDrafts((prev) => ({ ...prev, [q.id]: out.draft! }));
+    } else {
+      Alert.alert('AI draft', 'Could not generate a reply — try again or type manually.');
+    }
+  };
+
+  const translateDraft = async (q: StoreQuery) => {
+    const text = (drafts[q.id] || '').trim();
+    if (!text || !replyLang) {
+      Alert.alert('Translate', 'Pick a language and draft or type a reply first.');
+      return;
+    }
+    setAiLoading(q.id);
+    const out = await translateReplyText(text, replyLang);
+    setAiLoading(null);
+    if (out?.translated) {
+      setDrafts((prev) => ({ ...prev, [q.id]: out.translated! }));
+    }
+  };
+
   const addPin = async () => {
     const t = pinDraft.trim();
     if (!t) return;
@@ -107,11 +145,32 @@ export default function SellerQueriesScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
-        <ThemedText style={styles.hint}>Tap a chip — sends instantly.</ThemedText>
+        <ThemedText style={styles.hint}>Tap a chip — sends instantly. AI can draft replies.</ThemedText>
         <TouchableOpacity onPress={() => setEditingPins((v) => !v)}>
           <Text style={styles.pinEdit}>{editingPins ? 'Done' : 'Edit chips'}</Text>
         </TouchableOpacity>
       </View>
+
+      <View style={styles.langRow}>
+        <ThemedText style={styles.langLabel}>Reply language:</ThemedText>
+        {LANG_OPTIONS.map((lang) => (
+          <TouchableOpacity
+            key={lang || 'en'}
+            style={[styles.langChip, replyLang === lang && styles.langChipOn]}
+            onPress={() => setReplyLang(lang)}
+          >
+            <Text style={[styles.langChipText, replyLang === lang && styles.langChipTextOn]}>
+              {lang || 'English'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {intentTip ? (
+        <View style={styles.intentBox}>
+          <Text style={styles.intentText}>💡 {intentTip}</Text>
+        </View>
+      ) : null}
 
       {editingPins ? (
         <View style={styles.pinEditor}>
@@ -175,6 +234,25 @@ export default function SellerQueriesScreen() {
                 <ThemedText style={styles.notes}>{item.notes}</ThemedText>
               ) : null}
               <View style={styles.chipRow}>
+                <TouchableOpacity
+                  style={styles.aiChip}
+                  onPress={() => void aiDraftReply(item)}
+                  disabled={aiLoading === item.id}
+                >
+                  {aiLoading === item.id ? (
+                    <ActivityIndicator size="small" color="#1D3557" />
+                  ) : (
+                    <ThemedText style={styles.aiChipText}>✨ AI draft</ThemedText>
+                  )}
+                </TouchableOpacity>
+                {replyLang ? (
+                  <TouchableOpacity
+                    style={styles.aiChip}
+                    onPress={() => void translateDraft(item)}
+                  >
+                    <ThemedText style={styles.aiChipText}>Translate</ThemedText>
+                  </TouchableOpacity>
+                ) : null}
                 {replies.map((r) => (
                   <TouchableOpacity
                     key={r}
@@ -220,6 +298,43 @@ const styles = StyleSheet.create({
   },
   hint: { fontSize: 13, color: '#666', flex: 1 },
   pinEdit: { color: '#1D3557', fontWeight: '800', fontSize: 13 },
+  langRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  langLabel: { fontSize: 12, color: '#666', marginRight: 4 },
+  langChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#EEF2F7',
+  },
+  langChipOn: { backgroundColor: '#1D3557' },
+  langChipText: { fontSize: 11, fontWeight: '700', color: '#1D3557' },
+  langChipTextOn: { color: '#fff' },
+  aiChip: {
+    backgroundColor: '#E8F0FE',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#C5D7F5',
+  },
+  aiChipText: { fontSize: 12, fontWeight: '800', color: '#1D3557' },
+  intentBox: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: '#FFF8E7',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#F0E0B0',
+  },
+  intentText: { fontSize: 12, color: '#6B4F2A', lineHeight: 17 },
   pinEditor: {
     marginHorizontal: 16,
     marginTop: 8,

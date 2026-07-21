@@ -16,11 +16,13 @@ import { useCart } from '@/contexts/CartContext';
 import { notifySubscribeApi } from '@/services/cartApi';
 import ProductImageGallery from '@/shared/ui/ProductImageGallery';
 import { fetchSellerProduct } from '@/services/storesApi';
+import { getProductDiscount, withDollar } from '@/shared/utils/productDiscount';
 
 export type ShelfProduct = {
   sku: string;
   name: string;
   price?: string;
+  list_price?: string;
   img?: string;
   images?: string[];
   url?: string;
@@ -60,6 +62,7 @@ export default function BuyerTileDetailModal({ product, visible, onClose }: Prop
         sku: remote.sku,
         name: remote.name || product.name,
         price: remote.price || product.price,
+        list_price: remote.list_price,
         img: remote.img || product.img,
         images: images.length ? images : product.images,
         url: remote.url || product.url,
@@ -80,6 +83,7 @@ export default function BuyerTileDetailModal({ product, visible, onClose }: Prop
 
   const p = fresh || product;
   const soldOut = (p.quantity ?? 0) <= 0;
+  const discount = getProductDiscount(p.price, p.list_price);
   const gallery = (() => {
     const list = (p.images || []).map(String).filter(Boolean);
     if (p.img && !list.includes(p.img)) list.unshift(p.img);
@@ -154,6 +158,11 @@ export default function BuyerTileDetailModal({ product, visible, onClose }: Prop
                 <Text style={styles.soldOutBadgeText}>SOLD OUT</Text>
               </View>
             ) : null}
+            {discount ? (
+              <View style={styles.discountBadge}>
+                <Text style={styles.discountBadgeText}>{discount.percentOff}% OFF</Text>
+              </View>
+            ) : null}
           </View>
 
           <ScrollView
@@ -164,7 +173,14 @@ export default function BuyerTileDetailModal({ product, visible, onClose }: Prop
           >
             <View style={styles.body}>
               <Text style={styles.name}>{p.name}</Text>
-              {p.price ? <Text style={styles.price}>{p.price}</Text> : null}
+              {discount ? (
+                <View style={styles.priceRow}>
+                  <Text style={styles.originalPrice}>{withDollar(p.list_price)}</Text>
+                  <Text style={styles.salePrice}>{withDollar(p.price)}</Text>
+                </View>
+              ) : p.price ? (
+                <Text style={styles.price}>{withDollar(p.price)}</Text>
+              ) : null}
 
               <View style={styles.metaRow}>
                 {p.category ? (
@@ -283,9 +299,27 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   soldOutBadgeText: { color: '#fff', fontWeight: '800', fontSize: 11 },
+  discountBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: '#C62828',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  discountBadgeText: { color: '#fff', fontWeight: '900', fontSize: 11 },
   body: { padding: 16, gap: 10, paddingBottom: 22 },
   name: { fontSize: 20, fontWeight: '800', color: '#111' },
   price: { fontSize: 18, fontWeight: '800', color: Brand.colors.brandBlue },
+  priceRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
+  originalPrice: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#C62828',
+    textDecorationLine: 'line-through',
+  },
+  salePrice: { fontSize: 20, fontWeight: '900', color: Brand.colors.brandBlue },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     backgroundColor: '#F2F2F2',

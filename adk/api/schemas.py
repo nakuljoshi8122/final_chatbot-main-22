@@ -22,6 +22,9 @@ class SellerProductIn(BaseModel):
     updated_at: str | None = None
     force_retag: bool = False
     tags: list[str] | None = None
+    list_price: str | None = None
+    # Explicit price edits remove any active promotion until it is reapplied.
+    clear_discount: bool = False
 
 
 class StoreCreateIn(BaseModel):

@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Brand } from '@/shared/theme/Brand';
 import { TileProduct } from '@/shared/utils/parseTiles';
+import { getProductDiscount, withDollar } from '@/shared/utils/productDiscount';
 
 interface ProductTileCardProps {
   product: TileProduct;
@@ -63,6 +64,7 @@ export default function ProductTileCard({ product, onSelect, onPressOverride }: 
   };
 
   const features = product.features?.slice(0, 2) ?? [];
+  const discount = getProductDiscount(product.price, product.list_price);
 
   return (
     <Pressable
@@ -71,19 +73,26 @@ export default function ProductTileCard({ product, onSelect, onPressOverride }: 
       onPressOut={() => setPressed(false)}
       style={[styles.card, pressed && styles.cardPressed]}
     >
-      {!imgError ? (
-        <Image
-          source={{ uri: product.img }}
-          style={styles.image}
-          contentFit="cover"
-          transition={150}
-          onError={() => setImgError(true)}
-        />
-      ) : (
-        <View style={styles.imageFallback}>
-          <Ionicons name="image-outline" size={24} color={Brand.colors.muted} />
-        </View>
-      )}
+      <View style={styles.imageWrap}>
+        {!imgError ? (
+          <Image
+            source={{ uri: product.img }}
+            style={styles.image}
+            contentFit="cover"
+            transition={150}
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <View style={styles.imageFallback}>
+            <Ionicons name="image-outline" size={24} color={Brand.colors.muted} />
+          </View>
+        )}
+        {discount ? (
+          <View style={styles.promoBadge}>
+            <Text style={styles.promoBadgeText}>{discount.percentOff}% OFF</Text>
+          </View>
+        ) : null}
+      </View>
 
       <View style={styles.body}>
         <View style={styles.titleRow}>
@@ -98,7 +107,14 @@ export default function ProductTileCard({ product, onSelect, onPressOverride }: 
         {product.color ? (
           <Text style={styles.colorText} numberOfLines={1}>{product.color}</Text>
         ) : null}
-        <Text style={styles.price}>{product.price}</Text>
+        {discount ? (
+          <View style={styles.priceRow}>
+            <Text style={styles.listPrice}>{withDollar(product.list_price)}</Text>
+            <Text style={styles.salePrice}>{withDollar(product.price)}</Text>
+          </View>
+        ) : (
+          <Text style={styles.price}>{withDollar(product.price)}</Text>
+        )}
 
         {features.length > 0 && (
           <View style={styles.features}>
@@ -183,6 +199,9 @@ const styles = StyleSheet.create({
   cardPressed: {
     borderColor: Brand.colors.primary,
   },
+  imageWrap: {
+    position: 'relative',
+  },
   image: {
     width: TILE_WIDTH,
     height: 120,
@@ -196,6 +215,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderBottomWidth: 1,
     borderBottomColor: Brand.colors.border,
+  },
+  promoBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#C62828',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  promoBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 0.2,
   },
   body: {
     padding: 8,
@@ -228,6 +262,24 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Brand.colors.muted,
     marginTop: 3,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+    flexWrap: 'wrap',
+  },
+  listPrice: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#C62828',
+    textDecorationLine: 'line-through',
+  },
+  salePrice: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Brand.colors.primary,
   },
   price: {
     fontSize: 11,

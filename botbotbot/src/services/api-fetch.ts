@@ -1,5 +1,6 @@
 // API service
 import * as FileSystem from 'expo-file-system/legacy';
+import { API_BASE } from '@/services/apiBase';
 import { parseAgentResponse, TileProduct, ChatTable } from '@/shared/utils/parseTiles';
 
 export interface TileMeta {
@@ -65,7 +66,7 @@ class ApiService {
   private _storeTag: string | null = null;
 
   constructor(baseURL?: string) {
-    this.baseURL = baseURL || process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.17:8000';
+    this.baseURL = baseURL || API_BASE;
   }
 
   setStoreTag(store: string | null) {

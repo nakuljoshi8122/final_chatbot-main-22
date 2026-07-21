@@ -1,11 +1,6 @@
 """Postgres-backed chat session memory — survives server restarts.
 
-Stores conversation messages plus cart / active-product state
-(formerly MongoDB `shopassist_marketplace_db.chat_sessions`).
-
-Reads the same DATABASE_URL as ADK (postgresql+asyncpg://) and normalizes it
-to a sync SQLAlchemy driver so the public APIs can stay synchronous for
-main.py / session_commerce.py callers.
+Stores conversation messages plus legacy cart / active-product columns.
 """
 
 from __future__ import annotations
@@ -24,9 +19,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 
 try:
-    from commerce.tile_validator import strip_agent_markup
+    from commerce.agent_markup import strip_agent_markup
 except ImportError:
-    from commerce.tile_validator import strip_agent_markup
+    from commerce.agent_markup import strip_agent_markup
 
 load_dotenv(ENV_FILE)
 
@@ -355,7 +350,7 @@ class SessionHistory(MutableMapping):
 
 
 def hydrate_session_state(session_id: str) -> None:
-    """Restore cart + active product into in-memory commerce dicts."""
+    """Restore legacy in-memory cart/active-product for old tab flows."""
     if not session_id:
         return
     doc = load_session(session_id)
