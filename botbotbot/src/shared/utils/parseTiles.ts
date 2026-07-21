@@ -1,7 +1,11 @@
+import { API_BASE, rewriteProductImageUrl } from '@/services/apiBase';
+
 export interface TileProduct {
   id: string;
   name: string;
   price: string;
+  /** Original price when a promo/discount is active. */
+  list_price?: string;
   category?: string;
   description?: string;
   features?: string[];
@@ -52,26 +56,19 @@ function normalizeFeatures(t: Record<string, unknown>): string[] {
   return fallback.slice(0, 2);
 }
 
-const API_BASE = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.17:8000').replace(/\/$/, '');
-
-/** Point product-images at the Expo API host (agent may embed a stale LAN IP). */
-function rewriteProductImageHost(url: string): string {
-  if (!url || !API_BASE) return url;
-  try {
-    const pathMatch = url.match(/\/product-images\/[^?\s#]+/i);
-    if (pathMatch) return `${API_BASE}${pathMatch[0]}`;
-  } catch {
-    // keep original
-  }
-  return url;
-}
-
 function resolveTileImg(t: Record<string, unknown>, name: string): string {
   const id = t.id ? String(t.id) : '';
-  const sku = id.startsWith('tile-') ? id.slice(5) : id;
-  const img = t.img ? String(t.img) : '';
+  const skuFromId = id.startsWith('tile-') ? id.slice(5) : id;
+  const sku = t.sku ? String(t.sku) : skuFromId;
+  const img = t.img
+    ? String(t.img)
+    : t.image_url
+      ? String(t.image_url)
+      : t.imageUrl
+        ? String(t.imageUrl)
+        : '';
   if (img && !img.includes('via.placeholder.com')) {
-    return rewriteProductImageHost(img);
+    return rewriteProductImageUrl(img);
   }
   if (sku) return `${API_BASE}/product-images/${sku}.jpg`;
   return placeholderImg(name);
@@ -80,7 +77,7 @@ function resolveTileImg(t: Record<string, unknown>, name: string): string {
 function resolveTileImages(t: Record<string, unknown>, name: string): string[] {
   const primary = resolveTileImg(t, name);
   const extras = Array.isArray(t.images)
-    ? t.images.map(String).filter(Boolean).map(rewriteProductImageHost)
+    ? t.images.map(String).filter(Boolean).map(rewriteProductImageUrl)
     : [];
   const out: string[] = [];
   for (const u of [primary, ...extras]) {
@@ -93,23 +90,22 @@ function tileFromEntry(t: Record<string, unknown>, i: number): TileProduct | nul
   if (!t?.name) return null;
   const name = String(t.name);
   const images = resolveTileImages(t, name);
+  const sku = t.sku ? String(t.sku) : undefined;
   return {
     id: String(t.id || `tile-${i}`),
     name,
     price: String(t.price || ''),
+    list_price: t.list_price ? String(t.list_price) : undefined,
     category: t.category ? String(t.category) : undefined,
     description: t.description ? String(t.description) : undefined,
     features: normalizeFeatures(t),
     tag: t.tag ? String(t.tag) : undefined,
     color: t.color ? String(t.color) : undefined,
-    url: String(
-      t.url ||
-        `https://shopassist.local/${encodeURIComponent(name.toLowerCase().replace(/\s+/g, '-'))}`,
-    ),
+    url: String(t.url || (sku ? `/product/${sku}` : '')),
     img: images[0] || resolveTileImg(t, name),
     images,
     icon: t.icon ? String(t.icon) : undefined,
-    sku: t.sku ? String(t.sku) : undefined,
+    sku,
     status: t.status ? String(t.status) : undefined,
     quantity:
       t.quantity !== undefined && t.quantity !== null && !Number.isNaN(Number(t.quantity))
@@ -207,8 +203,8 @@ function recoverTilesFromMarkdown(
       id,
       name,
       price: priceMatch?.[1] || '',
-      url: nearbyLink?.url || rewriteProductImageHost(imgRaw),
-      img: rewriteProductImageHost(imgRaw),
+      url: nearbyLink?.url || rewriteProductImageUrl(imgRaw),
+      img: rewriteProductImageUrl(imgRaw),
       tag: 'Boutique',
       features: [],
     });

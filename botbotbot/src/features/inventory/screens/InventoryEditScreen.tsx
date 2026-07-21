@@ -35,6 +35,7 @@ import {
 } from '@/services/inventoryStore';
 import { fetchSellerProduct } from '@/services/storesApi';
 import type { InventoryStatus } from '@/shared/theme/SellerTheme';
+import { getProductDiscount, withDollar } from '@/shared/utils/productDiscount';
 
 function resolveParam(value: string | string[] | undefined): string {
   if (!value) return '';
@@ -83,6 +84,7 @@ export default function InventoryEditScreen() {
   const [status, setStatus] = useState<InventoryStatus>('active');
   const [imageUri, setImageUri] = useState<string | undefined>();
   const [customPhoto, setCustomPhoto] = useState(false);
+  const [hadDiscount, setHadDiscount] = useState(false);
 
   useEffect(() => {
     if (!editId) return;
@@ -90,17 +92,18 @@ export default function InventoryEditScreen() {
     (async () => {
       try {
         let item = await getInventoryItem(editId);
-        if (!item) {
+        const remote = await fetchSellerProduct(editId, storeId || undefined);
+        if (!item && remote) {
           // Chat-listed products live on the API first — hydrate into local store
-          const remote = await fetchSellerProduct(editId, storeId || undefined);
-          if (remote) {
-            item = await hydrateInventoryFromApi(remote);
-          }
+          item = await hydrateInventoryFromApi(remote);
         }
         if (cancelled || !item) return;
+        const discount = getProductDiscount(remote?.price, remote?.list_price);
         setName(item.name);
         setCategory(item.category);
-        setPrice(item.price);
+        // A discounted listing is edited from its original price. Saving clears the promo.
+        setPrice(discount ? withDollar(remote?.list_price) : item.price);
+        setHadDiscount(!!discount);
         setSku(item.sku);
         setDescription(item.description);
         setCategoryNotes(item.categoryNotes);
@@ -229,6 +232,7 @@ export default function InventoryEditScreen() {
         status,
         imageUri: customPhoto ? imageUri : previewUri,
         storeId: storeId || undefined,
+        clearDiscount: isEdit && hadDiscount,
       };
       if (isEdit) {
         // Ensure chat-created SKUs exist locally before update

@@ -29,7 +29,14 @@ def _public_base() -> str:
         os.getenv("API_PUBLIC_URL")
         or os.getenv("EXPO_PUBLIC_API_URL")
         or "http://127.0.0.1:8000"
-    ).rstrip("/")
+    ).strip().rstrip("/")
+
+
+def _price_amount(value: Any) -> float:
+    try:
+        return float(re.sub(r"[^\d.]", "", str(value or "")) or "0")
+    except Exception:
+        return 0.0
 
 
 def _load() -> dict[str, dict[str, Any]]:
@@ -647,6 +654,25 @@ def upsert_seller_product(payload: dict[str, Any], *, tag: bool = True, force_re
         "updated_at": now,
         "created_at": existing.get("created_at") or payload.get("created_at") or now,
     }
+    price_in_payload = "price" in payload
+    list_price_in_payload = "list_price" in payload
+    price_changed = price_in_payload and _price_amount(row.get("price")) != _price_amount(
+        existing.get("price")
+    )
+
+    if payload.get("clear_discount"):
+        row.pop("list_price", None)
+    elif list_price_in_payload:
+        lp = str(payload.get("list_price") or "").strip()
+        if lp:
+            row["list_price"] = lp
+        else:
+            row.pop("list_price", None)
+    elif price_changed:
+        # Manual price edits clear promo unless list_price is supplied with the new price.
+        row.pop("list_price", None)
+    elif existing.get("list_price"):
+        row["list_price"] = str(existing.get("list_price") or "").strip()
 
     payload_tags = payload.get("tags")
     if isinstance(payload_tags, list) and payload_tags:
@@ -840,6 +866,7 @@ def seller_as_catalog_products(
                 "sku": r["sku"],
                 "name": r["name"],
                 "price": r.get("price") or "",
+                "list_price": r.get("list_price") or "",
                 "category": r.get("category") or "",
                 "description": (r.get("description") or "")[:160],
                 "kb_excerpt": seller_to_kb_chunk(r)[:1200],

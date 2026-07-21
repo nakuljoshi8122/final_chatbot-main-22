@@ -28,6 +28,7 @@ import {
 } from '@/services/sellerLazyStore';
 import { tapHaptic, successHaptic, warnHaptic } from '@/shared/utils/sellerHaptics';
 import { createInventoryItem } from '@/services/inventoryStore';
+import { getProductDiscount, withDollar } from '@/shared/utils/productDiscount';
 
 const FILTERS: { key: InventoryStatus | 'all'; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -41,6 +42,7 @@ type Row = {
   name: string;
   category?: string;
   price?: string;
+  list_price?: string;
   quantity?: number;
   status?: string;
   img?: string;
@@ -128,13 +130,28 @@ export default function SellerInventoryScreen() {
 
   const patchRow = async (
     item: Row,
-    patch: { quantity?: number; price?: string; status?: string },
+    patch: {
+      quantity?: number;
+      price?: string;
+      list_price?: string;
+      clear_discount?: boolean;
+      status?: string;
+    },
     undoMessage: string,
-    previous: { quantity?: number; price?: string; status?: string },
+    previous: { quantity?: number; price?: string; list_price?: string; status?: string },
   ) => {
     setBusySku(item.sku);
     const nextQty = patch.quantity ?? item.quantity ?? 0;
     const nextPrice = patch.price ?? item.price;
+    const clearDiscount =
+      patch.clear_discount ??
+      (patch.price !== undefined && patch.list_price === undefined);
+    const nextListPrice =
+      patch.list_price !== undefined
+        ? patch.list_price
+        : clearDiscount
+          ? ''
+          : item.list_price;
     const nextStatus = patch.status ?? item.status ?? 'active';
 
     // Optimistic UI
@@ -145,6 +162,7 @@ export default function SellerInventoryScreen() {
               ...r,
               quantity: nextQty,
               price: nextPrice,
+              list_price: nextListPrice,
               status: nextStatus,
             }
           : r,
@@ -160,6 +178,9 @@ export default function SellerInventoryScreen() {
       img: item.img,
       quantity: nextQty,
       price: nextPrice?.startsWith('$') ? nextPrice : nextPrice ? `$${nextPrice}` : undefined,
+      list_price:
+        patch.list_price !== undefined ? patch.list_price : clearDiscount ? '' : undefined,
+      clear_discount: clearDiscount,
       status: nextStatus,
     });
     setBusySku(null);
@@ -172,6 +193,8 @@ export default function SellerInventoryScreen() {
                 ...r,
                 quantity: previous.quantity ?? item.quantity,
                 price: previous.price ?? item.price,
+                list_price:
+                  previous.list_price !== undefined ? previous.list_price : item.list_price,
                 status: previous.status ?? item.status,
               }
             : r,
@@ -221,6 +244,7 @@ export default function SellerInventoryScreen() {
           img: item.img,
           quantity: previous.quantity ?? item.quantity ?? 0,
           price: previous.price,
+          list_price: previous.list_price,
           status: previous.status ?? item.status,
         });
         setItems((prev) =>
@@ -230,6 +254,8 @@ export default function SellerInventoryScreen() {
                   ...r,
                   quantity: previous.quantity ?? item.quantity,
                   price: previous.price ?? item.price,
+                  list_price:
+                    previous.list_price !== undefined ? previous.list_price : item.list_price,
                   status: previous.status ?? item.status,
                 }
               : r,
@@ -268,16 +294,22 @@ export default function SellerInventoryScreen() {
       setEditingPriceSku(null);
       return;
     }
-    const oldN = parseFloat(priceDigits(item.price));
+    const discount = getProductDiscount(item.price, item.list_price);
+    const oldN = parseFloat(priceDigits(discount ? item.list_price : item.price));
     const newN = parseFloat(cleaned);
     const drop = oldN > 0 ? (oldN - newN) / oldN : 0;
     const apply = () => {
       const formatted = `$${cleaned}`;
       void patchRow(
         item,
-        { price: formatted },
+        { price: formatted, list_price: '', clear_discount: true },
         `Price → ${formatted}`,
-        { quantity: item.quantity, price: item.price, status: item.status },
+        {
+          quantity: item.quantity,
+          price: item.price,
+          list_price: item.list_price,
+          status: item.status,
+        },
       );
       setEditingPriceSku(null);
     };
@@ -594,6 +626,7 @@ export default function SellerInventoryScreen() {
           renderItem={({ item }) => {
             const st = item.status === 'archive' ? 'draft' : item.status || 'active';
             const low = (item.quantity ?? 0) <= 2;
+            const discount = getProductDiscount(item.price, item.list_price);
             return (
               <Swipeable
                 ref={(r) => {
@@ -622,6 +655,7 @@ export default function SellerInventoryScreen() {
                     </TouchableOpacity>
                   ) : null}
                   <TouchableOpacity
+                    style={styles.thumbWrap}
                     onPress={() =>
                       selectMode
                         ? toggleSelect(item.sku)
@@ -636,6 +670,11 @@ export default function SellerInventoryScreen() {
                     ) : (
                       <View style={[styles.thumb, styles.thumbPh]} />
                     )}
+                    {discount ? (
+                      <View style={styles.discountBadge}>
+                        <Text style={styles.discountBadgeText}>{discount.percentOff}%</Text>
+                      </View>
+                    ) : null}
                   </TouchableOpacity>
 
                   <View style={styles.meta}>
@@ -662,14 +701,23 @@ export default function SellerInventoryScreen() {
                       <TouchableOpacity
                         onPress={() => {
                           setEditingPriceSku(item.sku);
-                          setPriceDraft(priceDigits(item.price));
+                          setPriceDraft(
+                            priceDigits(discount ? item.list_price : item.price),
+                          );
                         }}
                       >
-                        <Text style={styles.price}>
-                          {item.price
-                            ? `$${priceDigits(item.price)}`
-                            : 'Tap to set price'}
-                        </Text>
+                        {discount ? (
+                          <View style={styles.discountPriceRow}>
+                            <Text style={styles.originalPrice}>
+                              {withDollar(item.list_price)}
+                            </Text>
+                            <Text style={styles.price}>{withDollar(item.price)}</Text>
+                          </View>
+                        ) : (
+                          <Text style={styles.price}>
+                            {item.price ? withDollar(item.price) : 'Tap to set price'}
+                          </Text>
+                        )}
                       </TouchableOpacity>
                     )}
 
@@ -791,12 +839,30 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   rowLow: { borderWidth: 1, borderColor: '#8B3A3A' },
+  thumbWrap: { position: 'relative' },
   thumb: { width: 56, height: 56, borderRadius: 8 },
   thumbPh: { backgroundColor: SellerTheme.surfaceElevated },
+  discountBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#C62828',
+    borderRadius: 999,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  discountBadgeText: { color: '#fff', fontSize: 9, fontWeight: '900' },
   meta: { flex: 1, gap: 4 },
   name: { color: SellerTheme.text, fontWeight: '700', fontSize: 15 },
   sub: { color: SellerTheme.textSecondary, fontSize: 12 },
   price: { color: '#6CB4FF', fontSize: 14, fontWeight: '700' },
+  discountPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  originalPrice: {
+    color: '#FF6B6B',
+    fontSize: 13,
+    fontWeight: '700',
+    textDecorationLine: 'line-through',
+  },
   priceEdit: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   dollar: { color: '#6CB4FF', fontWeight: '800', fontSize: 14 },
   priceInput: {

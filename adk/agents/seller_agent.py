@@ -19,6 +19,11 @@ try:
     from tools.seller_agent_tools import (
         list_my_inventory,
         list_low_stock_items,
+        find_similar_inventory_from_photo,
+        get_restock_priorities,
+        suggest_pricing_for_item,
+        analyze_buyer_questions,
+        ask_store_analytics,
         upsert_inventory_item,
         update_inventory_field,
         remove_inventory_item,
@@ -30,6 +35,11 @@ except ImportError:
     from tools.seller_agent_tools import (
         list_my_inventory,
         list_low_stock_items,
+        find_similar_inventory_from_photo,
+        get_restock_priorities,
+        suggest_pricing_for_item,
+        analyze_buyer_questions,
+        ask_store_analytics,
         upsert_inventory_item,
         update_inventory_field,
         remove_inventory_item,
@@ -48,6 +58,14 @@ ROLE
 - If they uploaded a photo, a pending chat photo is saved server-side. When listing via
   tools, call upsert_inventory_item with use_pending_chat_image="true" and the exact
   session_id from the SYSTEM NOTE. Never paste base64.
+- PHOTO QUESTIONS ("do I have this?", "anything like this?", "in my inventory?"):
+  call find_similar_inventory_from_photo(store_id, session_id) — NOT list_my_inventory
+  with the vision product name. That tool matches by product TYPE + features (shirt,
+  color, style) and returns similar catalog tiles. Say clearly if matches exist.
+- RESTOCK PRIORITY / "what should I restock?" → get_restock_priorities(store_id).
+- PRICING ADVICE → suggest_pricing_for_item(store_id, sku).
+- BUYER QUESTION THEMES → analyze_buyer_questions(store_id).
+- BUSINESS QUESTIONS ("top sellers?", "how many drafts?") → ask_store_analytics(store_id, question).
 
 SHOWING ITEMS AS CARDS
 - SEE / BROWSE / FIND items → call list_my_inventory (status=draft|active|trash as needed;
@@ -78,6 +96,11 @@ TONE
 search_kb_tool = FunctionTool(search_kb)
 get_contact_tool = FunctionTool(get_contact)
 update_contact_tool = FunctionTool(update_contact)
+find_similar_tool = FunctionTool(find_similar_inventory_from_photo)
+restock_priority_tool = FunctionTool(get_restock_priorities)
+pricing_tool = FunctionTool(suggest_pricing_for_item)
+buyer_intent_tool = FunctionTool(analyze_buyer_questions)
+store_analytics_tool = FunctionTool(ask_store_analytics)
 list_inv_tool = FunctionTool(list_my_inventory)
 low_stock_tool = FunctionTool(list_low_stock_items)
 upsert_inv_tool = FunctionTool(upsert_inventory_item)
@@ -97,6 +120,11 @@ seller_agent = LlmAgent(
         get_contact_tool,
         update_contact_tool,
         list_inv_tool,
+        find_similar_tool,
+        restock_priority_tool,
+        pricing_tool,
+        buyer_intent_tool,
+        store_analytics_tool,
         low_stock_tool,
         upsert_inv_tool,
         update_inv_tool,

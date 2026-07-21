@@ -18,6 +18,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useCart } from '@/contexts/CartContext';
 import { fetchStoreProducts, ApiSellerProduct } from '@/services/storesApi';
 import BuyerTileDetailModal, { ShelfProduct } from '@/features/buyer/components/BuyerTileDetailModal';
+import { getProductDiscount, withDollar } from '@/shared/utils/productDiscount';
 
 export default function ShelfScreen() {
   const { storeId } = useLocalSearchParams<{ storeId: string }>();
@@ -54,6 +55,7 @@ export default function ShelfScreen() {
       sku: p.sku,
       name: p.name,
       price: p.price,
+      list_price: p.list_price,
       img: p.img,
       images: p.images,
       url: p.url,
@@ -74,6 +76,7 @@ export default function ShelfScreen() {
 
   const renderItem = ({ item }: { item: ApiSellerProduct }) => {
     const soldOut = (item.quantity ?? 0) <= 0;
+    const discount = getProductDiscount(item.price, item.list_price);
     return (
       <Pressable style={styles.tile} onPress={() => openTile(item)}>
         <View style={styles.imageWrap}>
@@ -89,10 +92,22 @@ export default function ShelfScreen() {
               <Text style={styles.soldText}>SOLD OUT</Text>
             </View>
           ) : null}
+          {discount ? (
+            <View style={styles.discountBadge}>
+              <Text style={styles.discountBadgeText}>{discount.percentOff}% OFF</Text>
+            </View>
+          ) : null}
         </View>
         <View style={styles.tileBody}>
           <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
-          {item.price ? <Text style={styles.price}>{item.price}</Text> : null}
+          {discount ? (
+            <View style={styles.priceRow}>
+              <Text style={styles.originalPrice}>{withDollar(item.list_price)}</Text>
+              <Text style={styles.salePrice}>{withDollar(item.price)}</Text>
+            </View>
+          ) : item.price ? (
+            <Text style={styles.price}>{withDollar(item.price)}</Text>
+          ) : null}
           {!soldOut && (item.quantity ?? 0) <= 3 ? (
             <Text style={styles.lowStock}>Only {item.quantity} left</Text>
           ) : null}
@@ -219,8 +234,26 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 4,
   },
+  discountBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#C62828',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  discountBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900' },
   tileBody: { padding: 10, gap: 3 },
   name: { fontSize: 13, fontWeight: '700', color: '#111', lineHeight: 16 },
   price: { fontSize: 13, fontWeight: '700', color: '#111' },
+  priceRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 7 },
+  originalPrice: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#C62828',
+    textDecorationLine: 'line-through',
+  },
+  salePrice: { fontSize: 13, fontWeight: '900', color: '#111' },
   lowStock: { fontSize: 11, color: '#B00020', fontWeight: '600' },
 });

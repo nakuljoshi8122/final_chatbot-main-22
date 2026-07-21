@@ -16,6 +16,7 @@ import { TileProduct } from '@/shared/utils/parseTiles';
 import { fetchSellerProduct, ApiSellerProduct } from '@/services/storesApi';
 import { patchSellerProduct } from '@/services/patchSellerProduct';
 import { fetchNotifyCount, broadcastNotify } from '@/services/notifyApi';
+import { fetchAiPricing } from '@/services/sellerAiApi';
 import {
   bumpSoldOutHit,
   getSoldOutHits,
@@ -23,10 +24,12 @@ import {
 } from '@/services/sellerLazyStore';
 import { successHaptic, tapHaptic, warnHaptic } from '@/shared/utils/sellerHaptics';
 import ProductImageGallery from '@/shared/ui/ProductImageGallery';
+import { getProductDiscount } from '@/shared/utils/productDiscount';
 
 type Props = {
   product: TileProduct | null;
   storeId: string;
+  storeName?: string;
   onClose: () => void;
   /** Called after a successful quick edit so the chat can refresh tiles. */
   onUpdated?: () => void;
@@ -38,7 +41,7 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }>
   trash: { bg: '#FBE3E1', text: '#B3261E', label: 'Trash' },
 };
 
-const PROMO_TAG = ' · 10% off';
+const PROMO_RATE = 0.1;
 
 function priceText(value?: string): string {
   const p = String(value || '').trim();
@@ -46,13 +49,25 @@ function priceText(value?: string): string {
   return p.startsWith('$') ? p : `$${p}`;
 }
 
-function stripPromo(desc: string): string {
-  return desc.replace(/\s*·\s*10%\s*off/gi, '').trim();
+function parsePriceNum(value?: string): number {
+  const n = parseFloat(String(value || '').replace(/[^\d.]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatPriceNum(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '';
+  const rounded = Math.round(n * 100) / 100;
+  return rounded % 1 === 0 ? String(Math.round(rounded)) : rounded.toFixed(2);
+}
+
+function saleFromList(list: number): number {
+  return Math.round(list * (1 - PROMO_RATE) * 100) / 100;
 }
 
 export default function SellerTileDetailModal({
   product,
   storeId,
+  storeName = '',
   onClose,
   onUpdated,
 }: Props) {
@@ -62,10 +77,13 @@ export default function SellerTileDetailModal({
   const [busy, setBusy] = useState(false);
   const [qty, setQty] = useState(0);
   const [priceDraft, setPriceDraft] = useState('');
+  const [listPriceDraft, setListPriceDraft] = useState('');
+  const [salePriceDraft, setSalePriceDraft] = useState('');
   const [status, setStatus] = useState('active');
   const [descLocal, setDescLocal] = useState('');
   const [notifyCount, setNotifyCount] = useState(0);
   const [soldOutHits, setSoldOutHits] = useState(0);
+  const [pricingTip, setPricingTip] = useState<string | null>(null);
 
   const sku = product?.sku || product?.id || '';
 
@@ -87,13 +105,32 @@ export default function SellerTileDetailModal({
             ? product.quantity
             : 0;
       setQty(q);
-      setPriceDraft(
-        String(remote?.price || product.price || '')
-          .replace(/^\$/, '')
-          .trim(),
-      );
+      const remotePrice = String(remote?.price || product.price || '')
+        .replace(/^\$/, '')
+        .trim();
+      const remoteList = String((remote ? remote.list_price : product.list_price) || '')
+        .replace(/^\$/, '')
+        .trim();
+      const remoteDesc = String(remote?.description ?? product.description ?? '');
+      const legacyPromoDesc = /10%\s*off/i.test(remoteDesc);
+
+      if (remoteList && parsePriceNum(remoteList) > parsePriceNum(remotePrice)) {
+        setListPriceDraft(remoteList);
+        setSalePriceDraft(remotePrice);
+        setPriceDraft(remoteList);
+      } else if (legacyPromoDesc && remotePrice) {
+        const list = parsePriceNum(remotePrice);
+        const sale = saleFromList(list);
+        setListPriceDraft(formatPriceNum(list));
+        setSalePriceDraft(formatPriceNum(sale));
+        setPriceDraft(formatPriceNum(list));
+      } else {
+        setListPriceDraft('');
+        setSalePriceDraft('');
+        setPriceDraft(remotePrice);
+      }
       setStatus(String(remote?.status || product.status || 'active').toLowerCase());
-      setDescLocal(String(remote?.description ?? product.description ?? ''));
+      setDescLocal(remoteDesc);
       const [nCount, hits] = await Promise.all([
         fetchNotifyCount(sku),
         getSoldOutHits(storeId, sku),
@@ -122,11 +159,14 @@ export default function SellerTileDetailModal({
     return list.length ? list : img ? [img] : [];
   })();
   const statusStyle = STATUS_COLORS[status] || STATUS_COLORS.active;
-  const hasPromo = /10%\s*off/i.test(description);
+  const discount = getProductDiscount(salePriceDraft, listPriceDraft);
+  const hasPromo = !!discount;
 
   const savePatch = async (patch: {
     quantity?: number;
     price?: string;
+    list_price?: string;
+    clear_discount?: boolean;
     status?: string;
     description?: string;
   }) => {
@@ -140,8 +180,17 @@ export default function SellerTileDetailModal({
       description: nextDesc || undefined,
       img: img || undefined,
       quantity: patch.quantity ?? qty,
-      price: priceText(patch.price ?? priceDraft),
+      price: priceText(patch.price ?? (hasPromo ? salePriceDraft : priceDraft)),
+      list_price:
+        patch.list_price !== undefined
+          ? patch.list_price
+            ? priceText(patch.list_price)
+            : ''
+          : hasPromo && listPriceDraft
+            ? priceText(listPriceDraft)
+            : undefined,
       status: patch.status ?? status,
+      clear_discount: patch.clear_discount,
     });
     setBusy(false);
     if (!ok) {
@@ -170,15 +219,24 @@ export default function SellerTileDetailModal({
       Alert.alert('Price needed', 'Enter a number.');
       return;
     }
-    const oldN = parseFloat(String(fresh?.price || product.price || '').replace(/[^\d.]/g, ''));
-    const newN = parseFloat(cleaned);
-    const drop = oldN > 0 ? (oldN - newN) / oldN : 0;
+    const newPrice = parsePriceNum(cleaned);
+    const oldRef = hasPromo
+      ? parsePriceNum(listPriceDraft)
+      : parsePriceNum(String(fresh?.price || product.price || ''));
+    const drop = oldRef > 0 ? (oldRef - newPrice) / oldRef : 0;
     const apply = async () => {
-      setPriceDraft(cleaned);
-      await savePatch({ price: cleaned });
+      const formatted = formatPriceNum(newPrice);
+      setPriceDraft(formatted);
+      setListPriceDraft('');
+      setSalePriceDraft('');
+      await savePatch({
+        price: formatted,
+        list_price: '',
+        clear_discount: true,
+      });
       successHaptic();
     };
-    if (drop > 0.3) {
+    if (!hasPromo && drop > 0.3) {
       warnHaptic();
       Alert.alert('Big price drop', `Drop ${Math.round(drop * 100)}%?`, [
         { text: 'Cancel', style: 'cancel' },
@@ -195,9 +253,34 @@ export default function SellerTileDetailModal({
   };
 
   const togglePromo = async () => {
-    const base = stripPromo(description);
-    const next = hasPromo ? base : `${base}${PROMO_TAG}`.trim();
-    await savePatch({ description: next });
+    if (!hasPromo) {
+      const list = parsePriceNum(priceDraft);
+      if (list <= 0) {
+        Alert.alert('Set a price first', 'Enter a price before applying 10% off.');
+        return;
+      }
+      const sale = saleFromList(list);
+      const listStr = formatPriceNum(list);
+      const saleStr = formatPriceNum(sale);
+      setListPriceDraft(listStr);
+      setSalePriceDraft(saleStr);
+      setPriceDraft(listStr);
+      await savePatch({
+        price: saleStr,
+        list_price: listStr,
+      });
+    } else {
+      const list = parsePriceNum(listPriceDraft) || parsePriceNum(priceDraft);
+      const listStr = formatPriceNum(list);
+      setListPriceDraft('');
+      setSalePriceDraft('');
+      setPriceDraft(listStr);
+      await savePatch({
+        price: listStr,
+        list_price: '',
+        clear_discount: true,
+      });
+    }
     void appendChangeLog(
       storeId,
       hasPromo ? `Removed promo on ${name}` : `10% off on ${name}`,
@@ -206,16 +289,39 @@ export default function SellerTileDetailModal({
     successHaptic();
   };
 
+  const suggestPrice = async () => {
+    setBusy(true);
+    const out = await fetchAiPricing(storeId, sku);
+    setBusy(false);
+    if (out?.suggested_price != null) {
+      setPricingTip(out.rationale || null);
+      const suggested = formatPriceNum(out.suggested_price);
+      setPriceDraft(suggested);
+      tapHaptic();
+    }
+  };
+
+  const onPriceDraftChange = (raw: string) => {
+    const cleaned = raw.replace(/[^\d.]/g, '');
+    setPriceDraft(cleaned);
+    setPricingTip(null);
+  };
+
   const notifyBuyers = async () => {
     if (notifyCount <= 0) {
       Alert.alert('No waitlist', 'Nobody asked to be notified yet.');
       return;
     }
     setBusy(true);
-    const n = await broadcastNotify(sku);
+    const result = await broadcastNotify(sku, storeId);
     setBusy(false);
     successHaptic();
-    Alert.alert('Notified', `Pinged ${n} buyer${n === 1 ? '' : 's'}.`);
+    Alert.alert(
+      'Notified',
+      result.message
+        ? `Sent to ${result.notified} buyer${result.notified === 1 ? '' : 's'}:\n\n"${result.message}"`
+        : `Pinged ${result.notified} buyer${result.notified === 1 ? '' : 's'}.`,
+    );
   };
 
   const goEdit = () => {
@@ -247,39 +353,65 @@ export default function SellerTileDetailModal({
             </View>
             {hasPromo ? (
               <View style={[styles.statusBadge, styles.promoBadge]}>
-                <Text style={styles.promoBadgeText}>10% off</Text>
+                <Text style={styles.promoBadgeText}>{discount!.percentOff}% OFF</Text>
               </View>
             ) : null}
           </View>
 
           <ScrollView
+            style={styles.scrollView}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled
+            bounces
           >
             <View style={styles.headRow}>
               <Text style={styles.name}>{name}</Text>
               {loading || busy ? <ActivityIndicator size="small" color="#888" /> : null}
             </View>
 
-            <View style={styles.priceRow}>
-              <Text style={styles.dollar}>$</Text>
-              <TextInput
-                style={styles.priceInput}
-                value={priceDraft}
-                onChangeText={(t) => setPriceDraft(t.replace(/[^\d.]/g, ''))}
-                keyboardType="decimal-pad"
-                placeholder="0"
-                placeholderTextColor="#BBB"
-              />
-              <Pressable
-                style={({ pressed }) => [styles.miniSave, pressed && styles.pressed]}
-                onPress={() => void savePrice()}
-                disabled={busy}
-              >
-                <Text style={styles.miniSaveText}>Save</Text>
-              </Pressable>
+            <View style={styles.priceBlock}>
+              {hasPromo && listPriceDraft ? (
+                <View style={styles.promoPriceRow}>
+                  <Text style={styles.listPriceStrike}>${listPriceDraft}</Text>
+                  <Text style={styles.salePrice}>${salePriceDraft}</Text>
+                </View>
+              ) : null}
+              <Text style={styles.priceEditLabel}>
+                {hasPromo ? 'Edit original price (saving removes discount)' : 'Edit price'}
+              </Text>
+              <View style={styles.priceRow}>
+                <Text style={styles.dollar}>$</Text>
+                <TextInput
+                  style={styles.priceInput}
+                  value={priceDraft}
+                  onChangeText={onPriceDraftChange}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  placeholderTextColor="#BBB"
+                />
+                <Pressable
+                  style={({ pressed }) => [styles.miniSave, pressed && styles.pressed]}
+                  onPress={() => void savePrice()}
+                  disabled={busy}
+                >
+                  <Text style={styles.miniSaveText}>Save</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.aiPriceBtn, pressed && styles.pressed]}
+                  onPress={() => void suggestPrice()}
+                  disabled={busy}
+                >
+                  <Text style={styles.aiPriceText}>AI price</Text>
+                </Pressable>
+              </View>
+              {hasPromo ? (
+                <Text style={styles.promoHint}>
+                  Current sale price ${salePriceDraft} · {discount!.percentOff}% off
+                </Text>
+              ) : null}
+              {pricingTip ? <Text style={styles.pricingTip}>{pricingTip}</Text> : null}
             </View>
 
             <View style={styles.actionBlock}>
@@ -356,7 +488,7 @@ export default function SellerTileDetailModal({
                   <Text
                     style={[styles.actionChipText, hasPromo && styles.actionChipTextOn]}
                   >
-                    {hasPromo ? 'Promo on' : '10% off'}
+                    {hasPromo ? `${discount!.percentOff}% off` : '10% off'}
                   </Text>
                 </Pressable>
               </View>
@@ -399,13 +531,6 @@ export default function SellerTileDetailModal({
                 <Text style={styles.metaText}>{sku}</Text>
               </View>
             </View>
-
-            {description ? (
-              <>
-                <Text style={styles.sectionLabel}>Details</Text>
-                <Text style={styles.description}>{description}</Text>
-              </>
-            ) : null}
           </ScrollView>
 
           <View style={styles.footer}>
@@ -442,6 +567,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingBottom: 16,
     maxHeight: '88%',
+    flexShrink: 1,
   },
   handle: {
     alignSelf: 'center',
@@ -452,7 +578,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 6,
   },
-  scroll: { paddingBottom: 12 },
+  scroll: { paddingBottom: 16 },
+  scrollView: { flexGrow: 0, flexShrink: 1, maxHeight: 340 },
   imageWrap: {
     marginTop: 6,
     borderRadius: 16,
@@ -472,7 +599,7 @@ const styles = StyleSheet.create({
   promoBadge: {
     left: undefined,
     right: 12,
-    backgroundColor: '#1D3557',
+    backgroundColor: '#C62828',
   },
   promoBadgeText: { fontSize: 12, fontWeight: '800', color: '#fff' },
   statusText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
@@ -484,6 +611,22 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   name: { flex: 1, fontSize: 20, fontWeight: '800', color: '#111' },
+  priceBlock: { marginTop: 10, gap: 4 },
+  promoPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  listPriceStrike: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#C62828',
+    textDecorationLine: 'line-through',
+  },
+  salePrice: { fontSize: 20, color: '#1D3557', fontWeight: '900' },
+  priceEditLabel: {
+    fontSize: 11,
+    color: '#777',
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  promoHint: { fontSize: 12, color: '#1B7A3D', fontWeight: '600', marginTop: 2 },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -505,6 +648,20 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   miniSaveText: { fontWeight: '800', color: '#1D3557', fontSize: 13 },
+  aiPriceBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#E8F0FE',
+  },
+  aiPriceText: { fontWeight: '800', color: '#1D3557', fontSize: 12 },
+  pricingTip: {
+    fontSize: 12,
+    color: '#555',
+    marginTop: 6,
+    fontStyle: 'italic',
+    lineHeight: 17,
+  },
   actionBlock: { marginTop: 16, gap: 8 },
   actionLabel: {
     fontSize: 12,
@@ -577,16 +734,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   metaText: { fontSize: 12, color: '#444', fontWeight: '600' },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#888',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 18,
-    marginBottom: 6,
-  },
-  description: { fontSize: 15, lineHeight: 22, color: '#333' },
   footer: {
     flexDirection: 'row',
     gap: 10,

@@ -1,17 +1,11 @@
-"""Product image URLs — stored on each product in MongoDB."""
+"""Product image URLs for boutique/seller listings."""
 
 from __future__ import annotations
 
-from paths import ENV_FILE, DATA_DIR, STATIC_DIR, PRODUCT_IMAGES_DIR, PENDING_CHAT_IMAGES_DIR, FAKE_KB_PATH, SELLER_PRODUCTS_JSON, INVENTORY_VISIBILITY_JSON, STORES_JSON, STORE_QUERIES_DIR, PRODUCT_IMAGES_JSON, BOUTIQUE_PRODUCT_IMAGES_JSON
+from paths import PRODUCT_IMAGES_DIR
 
 import os
-from pathlib import Path
 from urllib.parse import quote
-
-try:
-    from catalog.product_image_pools import image_url_for_product as _pool_url
-except ImportError:
-    from catalog.product_image_pools import image_url_for_product as _pool_url
 
 _PRODUCTS_DIR = PRODUCT_IMAGES_DIR
 
@@ -21,11 +15,8 @@ def _api_base() -> str:
 
 
 def resolve_image_url(product: dict) -> str:
-    """Build the image URL to store in MongoDB (local static file preferred)."""
-    pid = str(product.get("id", ""))
-    if pid and (_PRODUCTS_DIR / f"{pid}.jpg").is_file():
-        return f"{_api_base()}/product-images/{pid}.jpg"
-    return _pool_url(product)
+    """Prefer a local static product image, else a placeholder."""
+    return get_product_image(product)
 
 
 def get_product_image(product: dict) -> str:
@@ -40,6 +31,8 @@ def get_product_image(product: dict) -> str:
             if s.startswith("http") or s.startswith("/"):
                 return s
     pid = str(product.get("id") or product.get("sku") or "").strip().upper()
+    if pid.startswith("TILE-"):
+        pid = pid[5:]
     if pid and (_PRODUCTS_DIR / f"{pid}.jpg").is_file():
         return f"{_api_base()}/product-images/{pid}.jpg"
     name = str(product.get("name", "Product"))

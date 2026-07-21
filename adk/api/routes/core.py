@@ -8,7 +8,7 @@ from api import deps
 from api.schemas import ActiveProductBody
 from commerce.product_matcher import get_product_by_id
 from commerce.session_commerce import set_active_product
-from commerce.tile_validator import strip_agent_markup
+from commerce.agent_markup import strip_agent_markup
 from config.llm_config import get_llm_provider
 from persistence.session_store import hydrate_session_state, load_messages, load_session
 from voice.whisper_utils import is_openai_configured

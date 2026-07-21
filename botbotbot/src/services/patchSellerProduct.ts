@@ -12,6 +12,8 @@ export async function patchSellerProduct(payload: {
   description?: string;
   img?: string;
   url?: string;
+  list_price?: string;
+  clear_discount?: boolean;
 }): Promise<boolean> {
   try {
     const body: Record<string, unknown> = {
@@ -24,6 +26,12 @@ export async function patchSellerProduct(payload: {
       category: payload.category,
       description: payload.description,
     };
+    if (payload.list_price !== undefined) {
+      body.list_price = payload.list_price;
+    }
+    if (payload.clear_discount) {
+      body.clear_discount = true;
+    }
     if (payload.img) {
       body.image_url = payload.img;
       body.url = payload.url || payload.img;

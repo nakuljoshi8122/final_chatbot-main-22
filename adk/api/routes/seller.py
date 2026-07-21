@@ -19,7 +19,7 @@ async def post_seller_product(body: SellerProductIn):
     from catalog.seller_catalog import upsert_seller_product
 
     try:
-        payload = body.model_dump()
+        payload = body.model_dump(exclude_unset=True)
         force = bool(payload.pop("force_retag", False))
         row = upsert_seller_product(payload, tag=True, force_retag=force)
         return {"ok": True, "product": row}

@@ -7,9 +7,9 @@ Multi-store seller/buyer shopping assistant with AI chat, inventory management, 
 ```
 adk/                          # Python backend (FastAPI + Google ADK)
 ├── api/                      # FastAPI app, schemas, route modules
-├── agents/                   # Buyer, seller, and ShopAssist agents
-├── catalog/                  # Product catalogs and image helpers
-├── commerce/                 # Tiles, matching, cart, recommendations
+├── agents/                   # Buyer and seller CRM agents
+├── catalog/                  # Boutique KB + seller product catalogs
+├── commerce/                 # Buyer replies, tiles, cart, seller AI
 ├── config/                   # LLM configuration
 ├── data/                     # JSON/Markdown runtime data (stores, products)
 ├── media/                    # Uploaded image handling
@@ -80,16 +80,7 @@ npx expo start -c
 |----------|----------|---------|
 | `OPENAI_API_KEY` | `adk/.env` | Chat + voice |
 | `DATABASE_URL` | `adk/.env` | Postgres sessions |
-| `AGENT_MODE` | `adk/.env` | `crm` (default) or `shopassist` |
 | `EXPO_PUBLIC_API_URL` | `botbotbot/.env` | Backend URL for mobile |
-
-## Scripts
-
-```bash
-cd adk
-python scripts/seed_shopassist_mongo.py    # Mongo catalog (optional)
-python scripts/mongo_shopassist.py         # Alternate Mongo seed
-```
 
 ## Smoke test checklist
 

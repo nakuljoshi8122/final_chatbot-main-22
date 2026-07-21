@@ -15,7 +15,7 @@ export const SellerTheme = {
   overlay: 'rgba(0,0,0,0.55)',
   radius: 14,
   radiusSm: 10,
-  sellerName: 'Artisan Boutique',
+  sellerName: 'My Store',
 } as const;
 
 export const SELLER_CATEGORIES = ['Handicrafts', 'Apparel', 'Skincare'] as const;

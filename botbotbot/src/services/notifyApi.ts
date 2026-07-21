@@ -15,21 +15,21 @@ export async function fetchNotifyCount(sku: string): Promise<number> {
   }
 }
 
-export async function broadcastNotify(sku: string): Promise<number> {
+export async function broadcastNotify(sku: string, storeId?: string): Promise<{ notified: number; message?: string }> {
   try {
     const res = await fetchWithTimeout(
       `${API_BASE}/notify/broadcast`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sku }),
+        body: JSON.stringify({ sku, store_id: storeId || '' }),
       },
-      8000,
+      12000,
     );
-    if (!res.ok) return 0;
+    if (!res.ok) return { notified: 0 };
     const data = await res.json();
-    return Number(data?.notified || 0);
+    return { notified: Number(data?.notified || 0), message: data?.message };
   } catch {
-    return 0;
+    return { notified: 0 };
   }
 }

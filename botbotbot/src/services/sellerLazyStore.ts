@@ -295,4 +295,23 @@ export async function getSoldOutHits(storeId: string, sku: string): Promise<numb
   }
 }
 
+const BRIEF_SEEN_KEY = '@seller_brief_seen_sig';
+
+export async function loadBriefSeenSig(storeId: string): Promise<string | null> {
+  try {
+    const raw = await AsyncStorage.getItem(`${BRIEF_SEEN_KEY}_${storeId}`);
+    return raw || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveBriefSeenSig(storeId: string, sig: string): Promise<void> {
+  try {
+    await AsyncStorage.setItem(`${BRIEF_SEEN_KEY}_${storeId}`, sig);
+  } catch {
+    // ignore
+  }
+}
+
 export { DEFAULT_REPLIES };

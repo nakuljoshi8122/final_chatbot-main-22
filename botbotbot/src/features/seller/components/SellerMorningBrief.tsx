@@ -9,10 +9,20 @@ export type MorningBriefStats = {
   movers?: { name: string; count: number }[];
 };
 
+type Priority = {
+  sku: string;
+  name: string;
+  reason: string;
+};
+
 type Props = {
   storeName: string;
   stats: MorningBriefStats;
   done?: { lowStock?: boolean; drafts?: boolean; queries?: boolean };
+  narrative?: string;
+  priorities?: Priority[];
+  /** When true, hide inline AI box (shown in FAB instead). */
+  hideAiInline?: boolean;
   onLowStock: () => void;
   onDrafts: () => void;
   onQueries: () => void;
@@ -23,6 +33,9 @@ type Props = {
 export default function SellerMorningBrief({
   stats,
   done,
+  narrative,
+  priorities,
+  hideAiInline = false,
   onLowStock,
   onDrafts,
   onQueries,
@@ -65,6 +78,17 @@ export default function SellerMorningBrief({
 
   return (
     <View style={styles.wrap}>
+      {!hideAiInline && narrative ? (
+        <View style={styles.aiBox}>
+          <Text style={styles.aiLabel}>AI brief</Text>
+          <Text style={styles.aiText}>{narrative}</Text>
+          {priorities?.[0] ? (
+            <Text style={styles.aiPriority}>
+              Priority: {priorities[0].name} — {priorities[0].reason}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
       <View style={styles.bullets}>
         {bullets.map((b) => (
           <TouchableOpacity
@@ -104,6 +128,34 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     paddingHorizontal: 2,
     justifyContent: 'center',
+  },
+  aiBox: {
+    backgroundColor: '#F0F4FA',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  aiLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1D3557',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  aiText: {
+    fontSize: 13.5,
+    lineHeight: 19,
+    color: '#334155',
+    fontWeight: '500',
+  },
+  aiPriority: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#1B7A3D',
+    fontWeight: '700',
   },
   bullets: {
     gap: 12,

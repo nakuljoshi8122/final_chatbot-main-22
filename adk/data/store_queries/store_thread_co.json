@@ -27,10 +27,10 @@
     "question": "Do y have any pant shirt combo",
     "notes": "auto: buyer ask safety net",
     "session_id": "session_1784205207142_poh5l0tgd",
-    "status": "open",
-    "answer": "",
+    "status": "answered",
+    "answer": "Yes, in stock",
     "created_at": "2026-07-16T13:23:44.714691+00:00",
-    "updated_at": "2026-07-16T13:23:44.714713+00:00"
+    "updated_at": "2026-07-20T08:04:37.866613+00:00"
   },
   {
     "id": "q_e9c6714362",
@@ -49,10 +49,10 @@
     "question": "tshirts",
     "notes": "",
     "session_id": "session_1784207107809_tb4bdk41g",
-    "status": "open",
-    "answer": "",
+    "status": "answered",
+    "answer": "Yes, in stock",
     "created_at": "2026-07-16T13:05:29.834138+00:00",
-    "updated_at": "2026-07-16T13:05:29.834144+00:00"
+    "updated_at": "2026-07-20T08:04:48.980016+00:00"
   },
   {
     "id": "q_b59271bb94",
@@ -60,10 +60,10 @@
     "question": "shirts",
     "notes": "",
     "session_id": "session_1784207107809_tb4bdk41g",
-    "status": "open",
-    "answer": "",
+    "status": "answered",
+    "answer": "Yes, in stock",
     "created_at": "2026-07-16T13:05:19.324047+00:00",
-    "updated_at": "2026-07-16T13:05:19.324056+00:00"
+    "updated_at": "2026-07-20T08:04:50.766370+00:00"
   },
   {
     "id": "q_85d432ff3b",

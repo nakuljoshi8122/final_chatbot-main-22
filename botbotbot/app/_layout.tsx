@@ -6,6 +6,7 @@ import {
 } from '@expo-google-fonts/instrument-serif';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { LogBox } from 'react-native';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -14,6 +15,14 @@ import { useColorScheme } from '@/shared/hooks/useColorScheme';
 import { AppProvider } from '@/contexts/AppContext';
 import { CartProvider } from '@/contexts/CartContext';
 import { StoreProvider } from '@/features/legacy-store/context/StoreContext';
+
+// Metro HMR can fail mid-reload when the bundler restarts; don't spam a bottom toast.
+LogBox.ignoreLogs([
+  'LoadBundleFromServerRequestError',
+  'LoadBundleFromServerRequestError:',
+  /LoadBundleFromServerRequestError/,
+  /Could not load bundle/,
+]);
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
