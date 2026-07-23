@@ -1,453 +1,345 @@
 {
-  "AP-NEW-XAFIM": {
-    "sku": "AP-NEW-XAFIM",
-    "name": "Casual Pants",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259817+00:00"
-  },
-  "AP-NEW-TBPVT": {
-    "sku": "AP-NEW-TBPVT",
-    "name": "Denim Jeans (Blue)",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259828+00:00"
-  },
-  "AP-NEW-S0OMF": {
-    "sku": "AP-NEW-S0OMF",
-    "name": "White Button-Up Shirt",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259831+00:00"
-  },
-  "AP-NEW-RTSRH": {
-    "sku": "AP-NEW-RTSRH",
-    "name": "Quarter Zip Pullover",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259833+00:00"
-  },
-  "AP-NEW-RQLGH": {
-    "sku": "AP-NEW-RQLGH",
-    "name": "White Long Sleeve Shirt (Cotton)",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259835+00:00"
-  },
-  "HC-NEW-AUMTQ": {
-    "sku": "HC-NEW-AUMTQ",
-    "name": "Phone Stand",
-    "status": "trash",
-    "updated_at": "2026-07-21T07:06:22.259837+00:00"
-  },
-  "SK-NEW-BD27A": {
-    "sku": "SK-NEW-BD27A",
-    "name": "serum niacinamide",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259839+00:00"
-  },
-  "SK-NEW-72AAA": {
-    "sku": "SK-NEW-72AAA",
-    "name": "Sunblock",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259841+00:00"
-  },
-  "HC-NEW-FB7A7": {
-    "sku": "HC-NEW-FB7A7",
-    "name": "Instax Camera",
-    "status": "trash",
-    "updated_at": "2026-07-21T07:06:22.259843+00:00"
-  },
-  "AP-NEW-HNSQA": {
-    "sku": "AP-NEW-HNSQA",
-    "name": "Beard guy",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259846+00:00"
-  },
-  "AP-NEW-81950": {
-    "sku": "AP-NEW-81950",
-    "name": "Grey pant white shirt combo",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259848+00:00"
-  },
-  "AP-NEW-5C27B": {
-    "sku": "AP-NEW-5C27B",
-    "name": "T-shirt",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259850+00:00"
-  },
-  "SK-NEW-4E630": {
-    "sku": "SK-NEW-4E630",
-    "name": "Movie Hair Leave-In Conditioner",
-    "status": "trash",
-    "updated_at": "2026-07-21T07:06:22.259851+00:00"
-  },
-  "HC-NEW-3UIC0": {
-    "sku": "HC-NEW-3UIC0",
-    "name": "Tee",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259853+00:00"
-  },
-  "HC-NEW-2TBIM": {
-    "sku": "HC-NEW-2TBIM",
-    "name": "Earrings",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259855+00:00"
-  },
   "HC-VASE-TP10": {
     "sku": "HC-VASE-TP10",
     "name": "Hand-Painted Terracotta Vase",
-    "status": "trash",
-    "updated_at": "2026-07-21T07:06:22.259857+00:00"
+    "status": "draft",
+    "updated_at": "2026-07-21T09:38:40.893208+00:00"
   },
   "HC-ELE-TEAK5": {
     "sku": "HC-ELE-TEAK5",
     "name": "Carved Teakwood Elephant",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259859+00:00"
+    "updated_at": "2026-07-21T09:38:40.893211+00:00"
   },
   "HC-WALL-BR28": {
     "sku": "HC-WALL-BR28",
     "name": "Brass Mandala Wall Plate",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259861+00:00"
+    "updated_at": "2026-07-21T09:38:40.893213+00:00"
   },
   "HC-BASK-JU3": {
     "sku": "HC-BASK-JU3",
     "name": "Handwoven Jute Basket Set",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259863+00:00"
+    "updated_at": "2026-07-21T09:38:40.893215+00:00"
   },
   "HC-MUG-BP01": {
     "sku": "HC-MUG-BP01",
     "name": "Ceramic Blue Pottery Mug",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259865+00:00"
+    "updated_at": "2026-07-21T09:38:40.893217+00:00"
   },
   "HC-RUN-BP72": {
     "sku": "HC-RUN-BP72",
     "name": "Block-Print Cotton Table Runner",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259867+00:00"
+    "updated_at": "2026-07-21T09:38:40.893219+00:00"
   },
   "HC-INC-SW40": {
     "sku": "HC-INC-SW40",
     "name": "Sandalwood Incense Gift Box",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259868+00:00"
+    "updated_at": "2026-07-21T09:38:40.893221+00:00"
   },
   "HC-CUSH-SL18": {
     "sku": "HC-CUSH-SL18",
     "name": "Hand-Embroidered Silk Cushion Cover",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259870+00:00"
+    "updated_at": "2026-07-21T09:38:40.893223+00:00"
   },
   "HC-BRAC-RG01": {
     "sku": "HC-BRAC-RG01",
     "name": "Recycled Glass Bead Bracelet",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259872+00:00"
+    "updated_at": "2026-07-21T09:38:40.893230+00:00"
   },
   "HC-DIYA-CL6": {
     "sku": "HC-DIYA-CL6",
     "name": "Clay Diya Lamp Set Pack of 6",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259874+00:00"
+    "updated_at": "2026-07-21T09:38:40.893233+00:00"
   },
   "HC-ART-MD-A3": {
     "sku": "HC-ART-MD-A3",
     "name": "Madhubani Art Print A3",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259876+00:00"
+    "updated_at": "2026-07-21T09:38:40.893238+00:00"
   },
   "HC-DESK-BM01": {
     "sku": "HC-DESK-BM01",
     "name": "Bamboo Desk Organizer",
     "status": "draft",
-    "updated_at": "2026-07-21T07:06:22.259877+00:00"
+    "updated_at": "2026-07-21T09:38:40.893241+00:00"
   },
   "HC-COAS-WD4": {
     "sku": "HC-COAS-WD4",
     "name": "Lacquered Wooden Coaster Set",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259879+00:00"
+    "updated_at": "2026-07-21T09:38:40.893243+00:00"
   },
   "HC-NOTE-HP80": {
     "sku": "HC-NOTE-HP80",
     "name": "Handmade Paper Notebook",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259881+00:00"
+    "updated_at": "2026-07-21T09:38:40.893246+00:00"
   },
   "HC-CAND-BRS": {
     "sku": "HC-CAND-BRS",
     "name": "Miniature Brass Candle Stand",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259883+00:00"
+    "updated_at": "2026-07-21T09:38:40.893248+00:00"
   },
   "HC-JEW-SI15": {
     "sku": "HC-JEW-SI15",
     "name": "Stone-Inlay Jewelry Box",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259884+00:00"
+    "updated_at": "2026-07-21T09:38:40.893250+00:00"
   },
   "HC-PLACE-PL2": {
     "sku": "HC-PLACE-PL2",
     "name": "Woven Palm Leaf Placemat Pair",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259886+00:00"
+    "updated_at": "2026-07-21T09:38:40.893252+00:00"
   },
   "HC-BOT-CU950": {
     "sku": "HC-BOT-CU950",
     "name": "Copper Water Bottle 950ml",
-    "status": "draft",
-    "updated_at": "2026-07-21T07:06:22.259888+00:00"
+    "status": "active",
+    "updated_at": "2026-07-21T09:38:40.893257+00:00"
   },
   "HC-PLAN-TT6": {
     "sku": "HC-PLAN-TT6",
     "name": "Terracotta Planter with Tray",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259890+00:00"
+    "updated_at": "2026-07-21T09:38:40.893259+00:00"
   },
   "HC-THR-WL50": {
     "sku": "HC-THR-WL50",
     "name": "Handloom Wool Throw Blanket",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259892+00:00"
+    "updated_at": "2026-07-21T09:38:40.893261+00:00"
   },
   "AP-SHIRT-CLB": {
     "sku": "AP-SHIRT-CLB",
     "name": "Organic Cotton Linen Blend Shirt",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259893+00:00"
+    "updated_at": "2026-07-21T09:38:40.893263+00:00"
   },
   "AP-CHINO-SL": {
     "sku": "AP-CHINO-SL",
     "name": "Classic Slim Chinos",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259895+00:00"
+    "updated_at": "2026-07-21T09:38:40.893266+00:00"
   },
   "AP-SWEAT-MER": {
     "sku": "AP-SWEAT-MER",
     "name": "Merino Crew Neck Sweater",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259897+00:00"
+    "status": "draft",
+    "updated_at": "2026-07-21T09:38:40.893269+00:00"
   },
   "AP-JACK-DNM": {
     "sku": "AP-JACK-DNM",
     "name": "Everyday Denim Jacket",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259898+00:00"
+    "updated_at": "2026-07-21T09:38:40.893275+00:00"
   },
   "AP-SHORT-R7": {
     "sku": "AP-SHORT-R7",
     "name": "Breathable Running Shorts 7 Inch",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259900+00:00"
+    "updated_at": "2026-07-21T09:38:40.893277+00:00"
   },
   "AP-TEE-OC3": {
     "sku": "AP-TEE-OC3",
     "name": "Organic Cotton Tee 3-Pack",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259902+00:00"
+    "updated_at": "2026-07-21T09:38:40.893280+00:00"
   },
   "AP-HOOD-TRV": {
     "sku": "AP-HOOD-TRV",
     "name": "Lightweight Travel Hoodie",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259903+00:00"
+    "updated_at": "2026-07-21T09:38:40.893282+00:00"
   },
   "AP-PANT-PAL": {
     "sku": "AP-PANT-PAL",
     "name": "Wide-Leg Palazzo Pants",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259905+00:00"
+    "updated_at": "2026-07-21T09:38:40.893284+00:00"
   },
   "AP-VEST-QLT": {
     "sku": "AP-VEST-QLT",
     "name": "Quilted Vest",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259908+00:00"
+    "updated_at": "2026-07-21T09:38:40.893286+00:00"
   },
   "AP-SKIRT-LIN": {
     "sku": "AP-SKIRT-LIN",
     "name": "Linen Midi Skirt",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259910+00:00"
+    "updated_at": "2026-07-21T09:38:40.893288+00:00"
   },
   "AP-WIND-SF": {
     "sku": "AP-WIND-SF",
     "name": "Softshell Windbreaker",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259911+00:00"
+    "updated_at": "2026-07-21T09:38:40.893290+00:00"
   },
   "AP-LEG-YR": {
     "sku": "AP-LEG-YR",
     "name": "Yoga Leggings High-Rise",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259913+00:00"
+    "updated_at": "2026-07-21T09:38:40.893292+00:00"
   },
   "AP-FLAN-OS": {
     "sku": "AP-FLAN-OS",
     "name": "Flannel Overshirt",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259915+00:00"
+    "updated_at": "2026-07-21T09:38:40.893294+00:00"
   },
   "AP-SCARF-SK90": {
     "sku": "AP-SCARF-SK90",
     "name": "Silk Scarf 90cm",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259917+00:00"
+    "status": "draft",
+    "updated_at": "2026-07-21T09:38:40.893297+00:00"
   },
   "AP-TOTE-CV": {
     "sku": "AP-TOTE-CV",
     "name": "Canvas Tote Bag",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259918+00:00"
+    "status": "trash",
+    "updated_at": "2026-07-21T11:28:17.566115+00:00"
   },
   "AP-POLO-PF": {
     "sku": "AP-POLO-PF",
     "name": "Performance Polo",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259920+00:00"
+    "updated_at": "2026-07-21T09:38:40.893301+00:00"
   },
   "AP-CAP-CRD": {
     "sku": "AP-CAP-CRD",
     "name": "Corduroy Cap",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259922+00:00"
+    "updated_at": "2026-07-21T09:38:40.893303+00:00"
   },
   "AP-BEAN-KT": {
     "sku": "AP-BEAN-KT",
     "name": "Knit Beanie",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259924+00:00"
+    "updated_at": "2026-07-21T09:38:40.893305+00:00"
   },
   "AP-SOCK-A5": {
     "sku": "AP-SOCK-A5",
     "name": "Ankle Socks 5-Pack",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259925+00:00"
+    "updated_at": "2026-07-21T09:38:40.893307+00:00"
   },
   "AP-TRENCH-BL": {
     "sku": "AP-TRENCH-BL",
     "name": "Belted Trench Coat",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259927+00:00"
-  },
-  "SK-SERUM-VC30": {
-    "sku": "SK-SERUM-VC30",
-    "name": "Rejuvenating Vitamin C Serum",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259929+00:00"
+    "updated_at": "2026-07-21T09:38:40.893327+00:00"
   },
   "SK-MOIST-AL50": {
     "sku": "SK-MOIST-AL50",
     "name": "Aloe Vera Hydrating Moisturizer",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259930+00:00"
+    "updated_at": "2026-07-21T09:38:40.893331+00:00"
   },
   "SK-CLN-FF150": {
     "sku": "SK-CLN-FF150",
     "name": "Gentle Foaming Cleanser",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259932+00:00"
+    "updated_at": "2026-07-21T09:38:40.893334+00:00"
   },
   "SK-TON-BM100": {
     "sku": "SK-TON-BM100",
     "name": "Balancing Toner Mist",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259934+00:00"
-  },
-  "SK-NIGHT-OR50": {
-    "sku": "SK-NIGHT-OR50",
-    "name": "Overnight Repair Night Cream",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259936+00:00"
+    "updated_at": "2026-07-21T09:38:40.893336+00:00"
   },
   "SK-SPF-MN50": {
     "sku": "SK-SPF-MN50",
     "name": "Mineral SPF 30 Daily Shield",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259937+00:00"
+    "updated_at": "2026-07-21T09:38:40.893340+00:00"
   },
   "SK-LIP-SP15": {
     "sku": "SK-LIP-SP15",
     "name": "Lip Balm SPF 15 Duo Pack",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259939+00:00"
+    "updated_at": "2026-07-21T09:38:40.893342+00:00"
   },
   "SK-MASK-CL75": {
     "sku": "SK-MASK-CL75",
     "name": "Clay Detox Face Mask",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259941+00:00"
+    "updated_at": "2026-07-21T09:38:40.893344+00:00"
   },
   "SK-EYE-CF15": {
     "sku": "SK-EYE-CF15",
     "name": "Eye Gel with Caffeine",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259942+00:00"
+    "updated_at": "2026-07-21T09:38:40.893345+00:00"
   },
   "SK-SHEET-H5": {
     "sku": "SK-SHEET-H5",
     "name": "Hydrating Sheet Mask Box of 5",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259944+00:00"
+    "updated_at": "2026-07-21T09:38:40.893347+00:00"
   },
   "SK-SCALP-SS50": {
     "sku": "SK-SCALP-SS50",
     "name": "Scalp Soothing Serum",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259946+00:00"
-  },
-  "SK-BODY-SH200": {
-    "sku": "SK-BODY-SH200",
-    "name": "Body Butter Shea Unscented",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259948+00:00"
+    "updated_at": "2026-07-21T09:38:40.893350+00:00"
   },
   "SK-HAND-TR40": {
     "sku": "SK-HAND-TR40",
     "name": "Hand Cream Travel Tube",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259949+00:00"
+    "updated_at": "2026-07-21T09:38:40.893353+00:00"
   },
   "SK-BHA-TN100": {
     "sku": "SK-BHA-TN100",
     "name": "Clarifying BHA Toner",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259951+00:00"
+    "updated_at": "2026-07-21T09:38:40.893356+00:00"
   },
   "SK-PEEL-EN30": {
     "sku": "SK-PEEL-EN30",
     "name": "Brightening Enzyme Peel",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259953+00:00"
-  },
-  "SK-OIL-RH30": {
-    "sku": "SK-OIL-RH30",
-    "name": "Rosehip Facial Oil",
-    "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259954+00:00"
+    "updated_at": "2026-07-21T09:38:40.893358+00:00"
   },
   "SK-MIC-SW200": {
     "sku": "SK-MIC-SW200",
     "name": "Micellar Water Sensitive",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259956+00:00"
+    "updated_at": "2026-07-21T09:38:40.893362+00:00"
   },
   "SK-SPOT-AG15": {
     "sku": "SK-SPOT-AG15",
     "name": "Acne Spot Gel",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259958+00:00"
+    "updated_at": "2026-07-21T09:38:40.893367+00:00"
   },
   "SK-SUN-AG150": {
     "sku": "SK-SUN-AG150",
     "name": "After-Sun Aloe Gel",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259960+00:00"
+    "updated_at": "2026-07-21T09:38:40.893369+00:00"
   },
   "SK-KIT-TR3": {
     "sku": "SK-KIT-TR3",
     "name": "Travel Mini Kit Cleanser Moisturizer SPF",
     "status": "active",
-    "updated_at": "2026-07-21T07:06:22.259961+00:00"
+    "updated_at": "2026-07-21T09:38:40.893371+00:00"
+  },
+  "AP-NEW-E8CMR": {
+    "sku": "AP-NEW-E8CMR",
+    "name": "Striped Polo T-Shirt",
+    "status": "purged",
+    "updated_at": "2026-07-21T09:38:40.872797+00:00"
   },
   "SK-NEW-FBDA7": {
     "sku": "SK-NEW-FBDA7",
@@ -479,16 +371,22 @@
     "status": "purged",
     "updated_at": "2026-07-21T06:35:02.723859+00:00"
   },
-  "AP-NEW-2AGZI": {
-    "sku": "AP-NEW-2AGZI",
-    "name": "Lace Bra",
+  "AP-NEW-KKI4W": {
+    "sku": "AP-NEW-KKI4W",
+    "name": "Black Laptop Bag",
     "status": "active",
-    "updated_at": "2026-07-21T08:01:20.164272+00:00"
+    "updated_at": "2026-07-21T11:32:28.124731+00:00"
   },
-  "AP-NEW-E8CMR": {
-    "sku": "AP-NEW-E8CMR",
-    "name": "Striped Polo T-Shirt",
+  "AP-NEW-RLVTR": {
+    "sku": "AP-NEW-RLVTR",
+    "name": "Graphic T-Shirt",
     "status": "active",
-    "updated_at": "2026-07-21T08:34:23.827157+00:00"
+    "updated_at": "2026-07-23T05:22:58.957429+00:00"
+  },
+  "AP-NEW-ENWKR": {
+    "sku": "AP-NEW-ENWKR",
+    "name": "Casual Button-Up Shirt",
+    "status": "active",
+    "updated_at": "2026-07-23T06:54:32.183338+00:00"
   }
 }

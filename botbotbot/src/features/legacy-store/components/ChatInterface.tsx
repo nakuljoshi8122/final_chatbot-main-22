@@ -6,11 +6,11 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
   Linking,
   Pressable,
   Alert,
+  Keyboard,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,6 +32,8 @@ import { ChatTableList } from '@/features/legacy-store/components/ChatTableView'
 import { pushSellerListingsToChat } from '@/services/inventoryStore';
 import { useStore } from '@/features/legacy-store/context/StoreContext';
 import { useRouter } from 'expo-router';
+import { GlassPane, GlassScreen } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 
 interface ChatInterfaceProps {
   initialSessionId?: string;
@@ -382,8 +384,8 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
   };
 
   return (
-    <View style={styles.container}>
-      <View style={[styles.topBar, { paddingTop: headerPaddingTop }]}>
+    <GlassScreen scheme="light" plain style={styles.container}>
+      <GlassPane scheme="light" intensity="regular" radius={0} flat contentStyle={[styles.topBar, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity
           onPress={async () => {
             await clearStore();
@@ -402,10 +404,10 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
           accessibilityLabel="Start new chat"
           disabled={isLoading}
         >
-          <Ionicons name="create-outline" size={20} color="#000000" />
+          <Ionicons name="create-outline" size={20} color={Glass.ink.light} />
           <Text style={styles.newChatText}>New</Text>
         </TouchableOpacity>
-      </View>
+      </GlassPane>
 
       {apiNotice ? (
         <View style={styles.notice}>
@@ -437,7 +439,7 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
         )}
       </ScrollView>
 
-      <View style={[styles.inputBar, { paddingBottom: inputBottomPadding }]}>
+      <GlassPane scheme="light" intensity="regular" radius={Glass.radius.xl} style={[styles.inputBar, { marginBottom: inputBottomPadding }]} contentStyle={styles.inputBarContent}>
         {isVoiceMode ? (
           <View style={styles.voiceBar}>
             {isRecording ? (
@@ -446,7 +448,7 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
                   {isPaused ? 'Paused' : 'Recording'} {Math.floor(duration)}s
                 </Text>
                 <TouchableOpacity onPress={isPaused ? resumeRecording : pauseRecording}>
-                  <Ionicons name={isPaused ? 'play' : 'pause'} size={22} color="#000" />
+                  <Ionicons name={isPaused ? 'play' : 'pause'} size={22} color={Glass.ink.light} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={async () => {
@@ -454,13 +456,13 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
                     if (uri) await sendVoiceMessage(uri);
                   }}
                 >
-                  <Ionicons name="stop-circle" size={28} color="#000" />
+                  <Ionicons name="stop-circle" size={28} color={Glass.ink.light} />
                 </TouchableOpacity>
               </>
             ) : (
               <>
                 <TouchableOpacity onPress={startRecording} disabled={isLoading}>
-                  <Ionicons name="mic" size={24} color="#000" />
+                  <Ionicons name="mic" size={24} color={Glass.ink.light} />
                 </TouchableOpacity>
                 <Text style={styles.voiceLabel}>Tap mic to record</Text>
               </>
@@ -472,7 +474,7 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
         ) : (
           <View style={styles.inputRow}>
             <TouchableOpacity onPress={() => setIsVoiceMode(true)} style={styles.iconBtn}>
-              <Ionicons name="mic-outline" size={20} color="#000" />
+              <Ionicons name="mic-outline" size={20} color={Glass.ink.light} />
             </TouchableOpacity>
             <TextInput
               ref={inputRef}
@@ -497,7 +499,7 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
               <Ionicons
                 name="arrow-up"
                 size={20}
-                color={inputText.trim() && !isLoading ? '#000' : '#C0C0C0'}
+                color={inputText.trim() && !isLoading ? Glass.ink.light : Glass.ink.lightTertiary}
               />
             </TouchableOpacity>
           </View>
@@ -505,25 +507,21 @@ export default function ChatInterface({ initialSessionId }: ChatInterfaceProps) 
         {recordingError ? (
           <Text style={styles.errorText}>{recordingError}</Text>
         ) : null}
-      </View>
+      </GlassPane>
       {Platform.OS === 'ios' && keyboardHeight > 0 ? (
         <View style={{ height: keyboardHeight }} />
       ) : null}
-    </View>
+    </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   topBar: {
     paddingHorizontal: 16,
     paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -531,7 +529,7 @@ const styles = StyleSheet.create({
   logo: {
     fontFamily: FONT_BOLD,
     fontSize: 18,
-    color: '#000000',
+    color: Glass.ink.light,
     textTransform: 'lowercase',
     letterSpacing: -0.5,
   },
@@ -542,25 +540,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 16,
+    borderColor: Glass.stroke.lightOuter,
+    backgroundColor: Glass.fill.lightSoft,
+    borderRadius: Glass.radius.pill,
   },
   newChatText: {
     fontFamily: FONT_BOLD,
     fontSize: 12,
-    color: '#000000',
+    color: Glass.ink.light,
   },
   notice: {
-    backgroundColor: '#FFF8E1',
+    backgroundColor: 'rgba(242,169,59,0.14)',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: Glass.stroke.lightOuter,
     paddingHorizontal: 16,
     paddingVertical: 6,
   },
   noticeText: {
     fontFamily: FONT,
     fontSize: 11,
-    color: '#5C4A00',
+    color: Glass.ink.light,
   },
   messages: {
     flex: 1,
@@ -574,7 +573,7 @@ const styles = StyleSheet.create({
   hint: {
     fontFamily: FONT,
     fontSize: 13,
-    color: '#767676',
+    color: Glass.ink.lightSecondary,
     lineHeight: 18,
     marginTop: 24,
   },
@@ -583,8 +582,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   userPill: {
-    backgroundColor: '#000000',
+    backgroundColor: 'rgba(61,123,255,0.92)',
     borderRadius: 18,
+    borderBottomRightRadius: 4,
     paddingHorizontal: 14,
     paddingVertical: 8,
     maxWidth: '82%',
@@ -603,37 +603,46 @@ const styles = StyleSheet.create({
   agentBlock: {
     maxWidth: '100%',
     width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.stroke.lightOuter,
+    borderRadius: 18,
+    borderBottomLeftRadius: 4,
+    padding: 12,
   },
   agentText: {
     fontFamily: FONT,
     fontSize: 14,
     lineHeight: 19,
-    color: '#000000',
+    color: Glass.ink.light,
   },
   typing: {
     fontFamily: FONT,
     fontSize: 14,
-    color: '#767676',
+    color: Glass.ink.lightSecondary,
     letterSpacing: 2,
   },
   msgRow: {
     marginBottom: 10,
   },
   inputBar: {
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingTop: 10,
+    marginHorizontal: 12,
+    marginTop: 8,
     zIndex: 10,
+    ...Glass.shadowSoft,
+  },
+  inputBarContent: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    backgroundColor: '#FFFFFF',
+    borderColor: Glass.stroke.lightOuter,
+    backgroundColor: 'rgba(255,255,255,0.36)',
+    borderRadius: Glass.radius.lg,
     paddingHorizontal: 12,
     paddingVertical: 8,
     minHeight: 48,
@@ -643,12 +652,11 @@ const styles = StyleSheet.create({
     fontFamily: FONT,
     fontSize: 15,
     lineHeight: 20,
-    color: '#000000',
+    color: Glass.ink.light,
     maxHeight: 120,
     minHeight: 24,
     paddingVertical: Platform.OS === 'ios' ? 8 : 6,
     paddingHorizontal: 0,
-    ...(Platform.OS === 'web' ? { outlineStyle: 'none' as const } : {}),
   },
   iconBtn: {
     padding: 4,
@@ -658,7 +666,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: Glass.stroke.lightOuter,
+    backgroundColor: 'rgba(255,255,255,0.36)',
+    borderRadius: Glass.radius.lg,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -666,21 +676,21 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: FONT,
     fontSize: 13,
-    color: '#767676',
+    color: Glass.ink.lightSecondary,
   },
   errorText: {
     fontFamily: FONT,
     fontSize: 11,
-    color: '#C62828',
+    color: Glass.tint.red,
     marginTop: 6,
   },
   checkoutBtn: {
     marginTop: 10,
     width: '100%',
-    backgroundColor: '#000000',
+    backgroundColor: Glass.ink.light,
     paddingVertical: 12,
     alignItems: 'center',
-    borderRadius: 4,
+    borderRadius: Glass.radius.pill,
   },
   checkoutBtnPressed: {
     backgroundColor: '#333333',

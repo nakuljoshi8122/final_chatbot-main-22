@@ -34,6 +34,17 @@ export interface ChatResponse {
   audio_response?: string;
   tile_meta?: TileMeta;
   commerce_meta?: CommerceMeta;
+  listing_meta?: {
+    name?: string;
+    price?: string;
+    quantity?: string;
+    category?: string;
+    description?: string;
+    sku?: string;
+    status?: string;
+    has_photo?: boolean;
+    in_progress?: boolean;
+  };
 }
 
 export interface HealthResponse {
@@ -95,6 +106,18 @@ class ApiService {
     }
   }
 
+  async clearListingDraft(sessionId: string): Promise<void> {
+    try {
+      await fetch(`${this.baseURL}/session/clear-listing-draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+    } catch {
+      // non-blocking
+    }
+  }
+
   async getSessionHistory(sessionId: string): Promise<SessionHistoryResponse | null> {
     try {
       const response = await fetch(`${this.baseURL}/session/${encodeURIComponent(sessionId)}/history`);
@@ -113,6 +136,17 @@ class ApiService {
       storeId?: string;
       role?: string;
       imageBase64?: string;
+      listingContext?: {
+        in_progress?: boolean;
+        name?: string;
+        price?: string;
+        quantity?: string;
+        category?: string;
+        description?: string;
+        sku?: string;
+        hasPhoto?: boolean;
+        source?: string;
+      };
     } | string,
   ): Promise<ChatResponse & { tiles: TileProduct[]; tables: ChatTable[]; displayText: string }> {
     try {
@@ -132,6 +166,7 @@ class ApiService {
       if (options.storeId) body.store_id = options.storeId;
       if (options.role) body.role = options.role;
       if (options.imageBase64) body.image_base64 = options.imageBase64;
+      if (options.listingContext) body.listing_context = options.listingContext;
 
       const fetchPromise = fetch(`${this.baseURL}/ask`, {
         method: 'POST',

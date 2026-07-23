@@ -241,13 +241,17 @@ def sanitize_boutique_response(
             "owner will follow",
         )
     )
-    if miss_reply:
+    # Keep tool-provided correlated / upsell TILES even when the prose is a miss note.
+    # Existing tiles came from search_kb (or were re-attached from the tool) — never invent
+    # extra cards via name mining on a miss reply.
+    existing = _tiles_from_existing_block(text)
+    if miss_reply and not existing:
         # Don't attach unrelated catalog cards when we already said we don't have it
         prose = _clean_prose(text)
         return prose or text.strip()
 
-    existing = _tiles_from_existing_block(text)
-    # Prefer TILES the model copied from search_kb; only fall back to name mining if empty
+    # Prefer TILES the model/tool provided; only fall back to name mining if empty
+    # (and never on a pure miss — handled above).
     if existing:
         merged = _unique_tiles(existing)[:5]
     else:
@@ -297,13 +301,29 @@ def sanitize_boutique_response(
         pass
 
     prose = _clean_prose(text)
+    if miss_reply and tiles and "you can also look" not in prose.lower():
+        names = [str(t.get("name") or "").strip() for t in tiles if t.get("name")]
+        names = [n for n in names if n][:3]
+        if names:
+            also = ", ".join(names)
+            prose = (
+                f"{prose}\nYou can also look at {also}."
+                if prose
+                else f"You can also look at {also}."
+            ).strip()
+
     looked_like_product_dump = bool(
         MD_IMG_RE.search(text or "")
         or MD_LINK_RE.search(text or "")
         or (prose.count("$") >= 2)
         or re.search(r"^\s*\d+\.\s+\*?\*?", prose, re.M)
     )
-    if tiles and (not prose or len(prose) > 280 or looked_like_product_dump):
+    # Never rewrite miss+correlated replies — keep the noted-request prose.
+    if (
+        tiles
+        and not miss_reply
+        and (not prose or len(prose) > 280 or looked_like_product_dump)
+    ):
         prose = "Here are a few options — tap a card for the photo and details."
 
     if not tiles:

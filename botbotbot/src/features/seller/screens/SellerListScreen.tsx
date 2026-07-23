@@ -1,12 +1,13 @@
+/**
+ * Legacy "Add" tab — feature kept, entry demoted.
+ * Opens Assist with the add-product form (same capability, less chrome).
+ */
 import React, { useEffect } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ThemedText } from '@/shared/ui/ThemedText';
+import { SellerTheme } from '@/shared/theme/SellerTheme';
 
-/**
- * Lazy path: the old "List" tab used to dump the seller into a manual form.
- * Now it immediately jumps to Chat with the add-product form open.
- */
 export default function SellerListScreen() {
   const { storeId } = useLocalSearchParams<{ storeId: string }>();
   const router = useRouter();
@@ -17,8 +18,8 @@ export default function SellerListScreen() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator color="#1D3557" />
-      <ThemedText style={styles.text}>Opening quick add…</ThemedText>
+      <ActivityIndicator color={SellerTheme.accent} />
+      <ThemedText style={styles.text}>Opening add…</ThemedText>
     </View>
   );
 }
@@ -29,7 +30,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: '#F4F4F2',
+    backgroundColor: 'transparent',
   },
-  text: { color: '#666', fontSize: 14, fontWeight: '600' },
+  text: { color: SellerTheme.text, fontSize: 14, fontWeight: '600' },
 });

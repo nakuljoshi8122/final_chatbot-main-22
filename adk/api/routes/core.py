@@ -5,7 +5,7 @@ import os
 from fastapi import APIRouter
 
 from api import deps
-from api.schemas import ActiveProductBody
+from api.schemas import ActiveProductBody, SessionOnlyBody
 from commerce.product_matcher import get_product_by_id
 from commerce.session_commerce import set_active_product
 from commerce.agent_markup import strip_agent_markup
@@ -78,6 +78,30 @@ async def mark_active_product(body: ActiveProductBody):
     if not tile:
         return {"ok": False, "error": "Product not found"}
     return {"ok": True, "product": tile}
+
+
+@router.post("/session/clear-listing-draft")
+async def clear_listing_draft(body: SessionOnlyBody):
+    """Clear in-progress listing draft after the seller publishes from the form."""
+    try:
+        from commerce.seller_listing_context import clear_pending_listing
+    except ImportError:
+        from commerce.seller_listing_context import clear_pending_listing
+    clear_pending_listing(body.session_id)
+    return {"ok": True}
+
+
+@router.post("/session/clear-listing-draft")
+async def clear_listing_draft(body: dict):
+    session_id = str(body.get("session_id") or "").strip()
+    if not session_id:
+        return {"ok": False, "error": "session_id required"}
+    try:
+        from commerce.seller_listing_context import clear_pending_listing
+    except ImportError:
+        from commerce.seller_listing_context import clear_pending_listing
+    clear_pending_listing(session_id)
+    return {"ok": True}
 
 
 @router.get("/session/{session_id}/history")

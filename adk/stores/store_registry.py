@@ -97,6 +97,15 @@ def create_store(payload: dict[str, Any]) -> dict[str, Any]:
     _save(data)
     QUERIES_DIR.mkdir(parents=True, exist_ok=True)
     _queries_path(store_id).write_text("[]\n", encoding="utf-8")
+    # Give this shop its own copies of the default category catalog (not shared SKUs)
+    try:
+        from catalog.seller_catalog import clone_default_catalog_for_store
+    except ImportError:
+        from catalog.seller_catalog import clone_default_catalog_for_store
+    try:
+        clone_default_catalog_for_store(store_id)
+    except Exception:
+        pass
     return row
 
 
@@ -114,6 +123,149 @@ def update_store(store_id: str, payload: dict[str, Any]) -> Optional[dict[str, A
     data[store_id] = row
     _save(data)
     return row
+
+
+def _scrub_buyer_data_for_store(store_id: str) -> dict[str, int]:
+    """Remove cart lines / orders / restock notifies tied to this shop."""
+    from paths import BUYER_CARTS_JSON, BUYER_ORDERS_JSON, RESTOCK_NOTIFY_JSON
+
+    sid = str(store_id or "").strip()
+    counts = {"carts": 0, "orders": 0, "notifies": 0}
+
+    def _load_json(path: Path, default: Any) -> Any:
+        if not path.exists():
+            return default
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return default
+
+    def _save_json(path: Path, payload: Any) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    carts = _load_json(BUYER_CARTS_JSON, {})
+    if isinstance(carts, dict):
+        changed = False
+        for buyer_id, cart in list(carts.items()):
+            items = cart.get("items") if isinstance(cart, dict) else None
+            if not isinstance(items, list):
+                continue
+            kept = [it for it in items if str(it.get("store_id") or "").strip() != sid]
+            if len(kept) != len(items):
+                counts["carts"] += len(items) - len(kept)
+                cart["items"] = kept
+                changed = True
+        if changed:
+            _save_json(BUYER_CARTS_JSON, carts)
+
+    orders = _load_json(BUYER_ORDERS_JSON, [])
+    if isinstance(orders, list):
+        kept_orders = []
+        for order in orders:
+            if not isinstance(order, dict):
+                kept_orders.append(order)
+                continue
+            items = order.get("items") if isinstance(order.get("items"), list) else []
+            if any(str(it.get("store_id") or "").strip() == sid for it in items if isinstance(it, dict)):
+                # Drop whole order if it was for this shop; otherwise strip lines
+                only_this = all(
+                    str(it.get("store_id") or "").strip() in ("", sid)
+                    for it in items
+                    if isinstance(it, dict)
+                )
+                if only_this or str(order.get("store_id") or "").strip() == sid:
+                    counts["orders"] += 1
+                    continue
+                order["items"] = [
+                    it
+                    for it in items
+                    if isinstance(it, dict) and str(it.get("store_id") or "").strip() != sid
+                ]
+            kept_orders.append(order)
+        if len(kept_orders) != len(orders):
+            _save_json(BUYER_ORDERS_JSON, kept_orders)
+        else:
+            # items may have been stripped in-place
+            _save_json(BUYER_ORDERS_JSON, kept_orders)
+
+    notify = _load_json(RESTOCK_NOTIFY_JSON, {})
+    if isinstance(notify, dict):
+        changed = False
+        for sku, subs in list(notify.items()):
+            if not isinstance(subs, list):
+                continue
+            kept = [s for s in subs if str((s or {}).get("store_id") or "").strip() != sid]
+            if len(kept) != len(subs):
+                counts["notifies"] += len(subs) - len(kept)
+                if kept:
+                    notify[sku] = kept
+                else:
+                    notify.pop(sku, None)
+                changed = True
+        if changed:
+            _save_json(RESTOCK_NOTIFY_JSON, notify)
+
+    return counts
+
+
+def delete_store(store_id: str, confirm_name: str) -> dict[str, Any]:
+    """Delete a shop after name confirmation. Purges its catalog + buyer visibility.
+
+    Other stores' products and registry rows are left intact.
+    """
+    sid = str(store_id or "").strip()
+    if not sid:
+        return {"ok": False, "error": "store_id is required"}
+
+    data = _load()
+    row = data.get(sid)
+    if not row:
+        return {"ok": False, "error": "Store not found"}
+
+    expected = str(row.get("name") or "").strip()
+    typed = str(confirm_name or "").strip()
+    if not typed:
+        return {"ok": False, "error": "Type the store name to confirm deletion"}
+    if typed.casefold() != expected.casefold():
+        return {
+            "ok": False,
+            "error": f'Store name does not match. Type "{expected}" exactly to delete.',
+        }
+
+    # 1) Products owned by this store (clones + seller uploads)
+    try:
+        from catalog.seller_catalog import purge_products_for_store
+    except ImportError:
+        from catalog.seller_catalog import purge_products_for_store
+    product_result = purge_products_for_store(sid)
+
+    # 2) Inbox / buyer questions for this shop
+    queries_path = _queries_path(sid)
+    queries_deleted = False
+    if queries_path.exists():
+        try:
+            queries_path.unlink()
+            queries_deleted = True
+        except OSError:
+            pass
+
+    # 3) Buyer carts / orders / notifies referencing this shop
+    buyer_scrub = _scrub_buyer_data_for_store(sid)
+
+    # 4) Remove store from registry last (buyer /stores list)
+    del data[sid]
+    _save(data)
+
+    return {
+        "ok": True,
+        "store_id": sid,
+        "name": expected,
+        "products_deleted": int(product_result.get("deleted") or 0),
+        "images_deleted": int(product_result.get("images_deleted") or 0),
+        "queries_deleted": queries_deleted,
+        "buyer_scrub": buyer_scrub,
+    }
 
 
 def _queries_path(store_id: str) -> Path:

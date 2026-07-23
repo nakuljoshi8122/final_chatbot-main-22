@@ -21,6 +21,8 @@ import {
   formatWhen,
   ShopRequest,
 } from '@/services/shopRequests';
+import { GlassPane, GlassScreen } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -79,20 +81,23 @@ export default function ProfileScreen() {
 
   if (!ready || !store) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator color="#111" />
-      </View>
+      <GlassScreen scheme="light">
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+          <ActivityIndicator color={Glass.ink.light} />
+        </View>
+      </GlassScreen>
     );
   }
 
   return (
+    <GlassScreen scheme="light">
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
+      <GlassPane scheme="light" intensity="regular" radius={0} flat contentStyle={styles.header}>
         <ThemedText type="title" style={styles.headerTitle}>
           {store.label} Store
         </ThemedText>
         <ThemedText style={styles.headerSubtitle}>{store.tagline}</ThemedText>
-      </View>
+      </GlassPane>
 
       <ScrollView
         style={styles.content}
@@ -102,7 +107,7 @@ export default function ProfileScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <View style={styles.profileCard}>
+        <GlassPane scheme="light" intensity="regular" noBlur flat style={styles.profileCard} contentStyle={styles.profileCardContent}>
           <View style={styles.logoContainer}>
             <ThemedText style={[styles.logoText, { color: store.accent }]}>
               {store.brandName}
@@ -140,7 +145,7 @@ export default function ProfileScreen() {
               </ThemedText>
             </View>
           </TouchableOpacity>
-        </View>
+        </GlassPane>
 
         <View style={styles.section}>
           <ThemedText type="subtitle" style={styles.sectionTitle}>
@@ -155,7 +160,7 @@ export default function ProfileScreen() {
             <ThemedText style={styles.emptyRequests}>No open requests right now.</ThemedText>
           ) : (
             requests.map((req) => (
-              <View key={req.id} style={styles.requestCard}>
+              <GlassPane key={req.id} scheme="light" intensity="regular" noBlur flat style={styles.requestCard} contentStyle={styles.requestCardContent}>
                 <View style={styles.requestMain}>
                   <ThemedText style={styles.requestItem}>{req.item_query}</ThemedText>
                   {req.notes ? (
@@ -172,7 +177,7 @@ export default function ProfileScreen() {
                 >
                   <Ionicons name="checkmark" size={18} color="white" />
                 </TouchableOpacity>
-              </View>
+              </GlassPane>
             ))
           )}
         </View>
@@ -208,20 +213,18 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+    </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Brand.colors.background,
+    backgroundColor: 'transparent',
   },
   header: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Brand.colors.border,
-    backgroundColor: Brand.colors.accent,
   },
   headerTitle: {
     fontSize: 24,
@@ -239,13 +242,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   profileCard: {
+    marginVertical: 16,
+    borderRadius: Glass.radius.lg,
+  },
+  profileCardContent: {
     alignItems: 'center',
     padding: 24,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: Brand.colors.border,
-    marginVertical: 16,
-    backgroundColor: Brand.colors.accent,
   },
   logoContainer: {
     marginBottom: 16,
@@ -320,7 +322,7 @@ const styles = StyleSheet.create({
     backgroundColor: Brand.colors.primary,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 4,
+    borderRadius: Glass.radius.pill,
     gap: 12,
   },
   sellerButtonTextWrap: {
@@ -346,14 +348,13 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   requestCard: {
+    marginTop: 10,
+    borderRadius: Glass.radius.md,
+  },
+  requestCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Brand.colors.border,
-    borderRadius: 4,
     padding: 12,
-    marginTop: 10,
-    backgroundColor: Brand.colors.accent,
     gap: 10,
   },
   requestMain: {

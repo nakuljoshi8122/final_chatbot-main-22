@@ -26,6 +26,9 @@ import {
 } from '@/services/sellerLazyStore';
 import UndoToast from '@/shared/ui/UndoToast';
 import { fetchAiQueryDraft, translateReplyText, fetchAiBuyerIntent } from '@/services/sellerAiApi';
+import { GlassPane, GlassPill } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
+import { SellerTheme } from '@/shared/theme/SellerTheme';
 
 const LANG_OPTIONS = ['', 'Hindi', 'Spanish', 'French'];
 
@@ -38,6 +41,7 @@ export default function SellerQueriesScreen() {
   const [replies, setReplies] = useState<string[]>([]);
   const [editingPins, setEditingPins] = useState(false);
   const [pinDraft, setPinDraft] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     undo?: () => void;
@@ -145,62 +149,94 @@ export default function SellerQueriesScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
-        <ThemedText style={styles.hint}>Tap a chip — sends instantly. AI can draft replies.</ThemedText>
-        <TouchableOpacity onPress={() => setEditingPins((v) => !v)}>
-          <Text style={styles.pinEdit}>{editingPins ? 'Done' : 'Edit chips'}</Text>
+        <ThemedText style={styles.hint}>
+          {queries.length
+            ? `${queries.length} open · answer the oldest first`
+            : 'Inbox clear'}
+        </ThemedText>
+        <TouchableOpacity
+          onPress={() => setShowSettings((v) => !v)}
+          hitSlop={8}
+          style={styles.settingsBtn}
+        >
+          <Ionicons
+            name="settings-outline"
+            size={18}
+            color={showSettings ? Glass.tint.blue : SellerTheme.text}
+          />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.langRow}>
-        <ThemedText style={styles.langLabel}>Reply language:</ThemedText>
-        {LANG_OPTIONS.map((lang) => (
-          <TouchableOpacity
-            key={lang || 'en'}
-            style={[styles.langChip, replyLang === lang && styles.langChipOn]}
-            onPress={() => setReplyLang(lang)}
-          >
-            <Text style={[styles.langChipText, replyLang === lang && styles.langChipTextOn]}>
-              {lang || 'English'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {intentTip ? (
-        <View style={styles.intentBox}>
-          <Text style={styles.intentText}>💡 {intentTip}</Text>
-        </View>
-      ) : null}
-
-      {editingPins ? (
-        <View style={styles.pinEditor}>
-          {replies.map((r) => (
-            <View key={r} style={styles.pinRow}>
-              <Text style={styles.pinText} numberOfLines={1}>
-                {r}
-              </Text>
-              <TouchableOpacity onPress={() => void removePin(r)}>
-                <Ionicons name="close-circle" size={18} color="#B00020" />
+      {showSettings ? (
+        <View style={styles.settingsPanel}>
+          <View style={styles.langRow}>
+            <ThemedText style={styles.langLabel}>Reply language</ThemedText>
+            {LANG_OPTIONS.map((lang) => (
+              <TouchableOpacity key={lang || 'en'} onPress={() => setReplyLang(lang)}>
+                <GlassPill
+                  scheme="light"
+                  active={replyLang === lang}
+                  activeColor={SellerTheme.chipActive}
+                  style={styles.langChip}
+                >
+                  <Text style={[styles.langChipText, replyLang === lang && styles.langChipTextOn]}>
+                    {lang || 'English'}
+                  </Text>
+                </GlassPill>
               </TouchableOpacity>
+            ))}
+          </View>
+
+          {intentTip ? (
+            <View style={styles.intentBox}>
+              <Text style={styles.intentText}>{intentTip}</Text>
             </View>
-          ))}
-          <View style={styles.pinAddRow}>
-            <TextInput
-              style={styles.pinInput}
-              value={pinDraft}
-              onChangeText={setPinDraft}
-              placeholder="New quick reply…"
-              placeholderTextColor="#999"
-            />
-            <TouchableOpacity style={styles.pinAddBtn} onPress={() => void addPin()}>
-              <Text style={styles.pinAddText}>Pin</Text>
+          ) : null}
+
+          <View style={styles.pinHeader}>
+            <ThemedText style={styles.langLabel}>Quick replies</ThemedText>
+            <TouchableOpacity onPress={() => setEditingPins((v) => !v)}>
+              <Text style={styles.pinEdit}>{editingPins ? 'Done' : 'Edit'}</Text>
             </TouchableOpacity>
           </View>
+
+          {editingPins ? (
+            <View style={styles.pinEditor}>
+              {replies.map((r) => (
+                <View key={r} style={styles.pinRow}>
+                  <Text style={styles.pinText} numberOfLines={1}>
+                    {r}
+                  </Text>
+                  <TouchableOpacity onPress={() => void removePin(r)}>
+                    <Ionicons name="close-circle" size={18} color={Glass.tint.red} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <View style={styles.pinAddRow}>
+                <TextInput
+                  style={styles.pinInput}
+                  value={pinDraft}
+                  onChangeText={setPinDraft}
+                  placeholder="New quick reply…"
+                  placeholderTextColor={SellerTheme.textSecondary}
+                />
+                <TouchableOpacity style={styles.pinAddBtn} onPress={() => void addPin()}>
+                  <Text style={styles.pinAddText}>Pin</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : replies.length ? (
+            <Text style={styles.pinPreview} numberOfLines={1}>
+              {replies.join(' · ')}
+            </Text>
+          ) : (
+            <Text style={styles.pinPreview}>No quick replies yet</Text>
+          )}
         </View>
       ) : null}
 
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 30 }} color="#111" />
+        <ActivityIndicator style={{ marginTop: 30 }} color={Glass.ink.light} />
       ) : (
         <FlatList
           data={queries}
@@ -214,6 +250,7 @@ export default function SellerQueriesScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
+              tintColor={Glass.ink.lightSecondary}
               onRefresh={async () => {
                 setRefreshing(true);
                 await load();
@@ -223,49 +260,55 @@ export default function SellerQueriesScreen() {
           }
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
-              <Ionicons name="checkmark-circle-outline" size={40} color="#1B7F4E" />
+              <Ionicons name="checkmark-circle-outline" size={40} color={Glass.tint.green} />
               <ThemedText style={styles.empty}>No open questions — nice.</ThemedText>
             </View>
           }
           renderItem={({ item }) => (
-            <View style={styles.card}>
+            <GlassPane
+              scheme="light"
+              intensity="regular"
+              noBlur
+              flat
+              style={styles.card}
+              contentStyle={styles.cardContent}
+            >
               <ThemedText style={styles.q}>{item.question}</ThemedText>
               {item.notes ? (
                 <ThemedText style={styles.notes}>{item.notes}</ThemedText>
               ) : null}
               <View style={styles.chipRow}>
                 <TouchableOpacity
-                  style={styles.aiChip}
                   onPress={() => void aiDraftReply(item)}
                   disabled={aiLoading === item.id}
                 >
-                  {aiLoading === item.id ? (
-                    <ActivityIndicator size="small" color="#1D3557" />
-                  ) : (
-                    <ThemedText style={styles.aiChipText}>✨ AI draft</ThemedText>
-                  )}
+                  <GlassPill scheme="light" style={styles.aiChip}>
+                    {aiLoading === item.id ? (
+                      <ActivityIndicator size="small" color={Glass.tint.blue} />
+                    ) : (
+                      <ThemedText style={styles.aiChipText}>AI draft</ThemedText>
+                    )}
+                  </GlassPill>
                 </TouchableOpacity>
                 {replyLang ? (
-                  <TouchableOpacity
-                    style={styles.aiChip}
-                    onPress={() => void translateDraft(item)}
-                  >
-                    <ThemedText style={styles.aiChipText}>Translate</ThemedText>
+                  <TouchableOpacity onPress={() => void translateDraft(item)}>
+                    <GlassPill scheme="light" style={styles.aiChip}>
+                      <ThemedText style={styles.aiChipText}>Translate</ThemedText>
+                    </GlassPill>
                   </TouchableOpacity>
                 ) : null}
                 {replies.map((r) => (
-                  <TouchableOpacity
-                    key={r}
-                    style={styles.replyChip}
-                    onPress={() => instantReply(item, r)}
-                  >
-                    <ThemedText style={styles.replyChipText}>{r}</ThemedText>
+                  <TouchableOpacity key={r} onPress={() => instantReply(item, r)}>
+                    <GlassPill scheme="light" style={styles.replyChip}>
+                      <ThemedText style={styles.replyChipText}>{r}</ThemedText>
+                    </GlassPill>
                   </TouchableOpacity>
                 ))}
               </View>
               <TextInput
                 style={styles.input}
                 placeholder="Or type your own…"
+                placeholderTextColor={SellerTheme.textSecondary}
                 value={drafts[item.id] || ''}
                 onChangeText={(t) => setDrafts((p) => ({ ...p, [item.id]: t }))}
                 multiline
@@ -273,7 +316,7 @@ export default function SellerQueriesScreen() {
               <TouchableOpacity style={styles.btn} onPress={() => void submit(item)}>
                 <ThemedText style={styles.btnText}>Send</ThemedText>
               </TouchableOpacity>
-            </View>
+            </GlassPane>
           )}
         />
       )}
@@ -288,61 +331,75 @@ export default function SellerQueriesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F4F2' },
+  container: { flex: 1, backgroundColor: 'transparent' },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 10,
+    paddingBottom: 4,
   },
-  hint: { fontSize: 13, color: '#666', flex: 1 },
-  pinEdit: { color: '#1D3557', fontWeight: '800', fontSize: 13 },
+  hint: { fontSize: 13, color: SellerTheme.textSecondary, flex: 1, fontWeight: '600' },
+  settingsBtn: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 17,
+    backgroundColor: SellerTheme.chipIdle,
+  },
+  settingsPanel: {
+    marginHorizontal: 12,
+    marginBottom: 4,
+    padding: 12,
+    borderRadius: Glass.radius.md,
+    backgroundColor: Glass.fill.light,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.stroke.lightOuter,
+    gap: 8,
+  },
+  pinHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  pinPreview: {
+    fontSize: 12,
+    color: SellerTheme.textSecondary,
+  },
+  pinEdit: { color: Glass.tint.blue, fontWeight: '800', fontSize: 13 },
   langRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 16,
-    paddingTop: 8,
   },
-  langLabel: { fontSize: 12, color: '#666', marginRight: 4 },
+  langLabel: { fontSize: 12, color: SellerTheme.textSecondary, marginRight: 4, fontWeight: '700' },
   langChip: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
-    backgroundColor: '#EEF2F7',
   },
-  langChipOn: { backgroundColor: '#1D3557' },
-  langChipText: { fontSize: 11, fontWeight: '700', color: '#1D3557' },
-  langChipTextOn: { color: '#fff' },
+  langChipText: { fontSize: 11, fontWeight: '700', color: SellerTheme.text },
+  langChipTextOn: { color: SellerTheme.chipActiveText },
   aiChip: {
-    backgroundColor: '#E8F0FE',
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#C5D7F5',
   },
-  aiChipText: { fontSize: 12, fontWeight: '800', color: '#1D3557' },
+  aiChipText: { fontSize: 12, fontWeight: '800', color: Glass.tint.blue },
   intentBox: {
-    marginHorizontal: 16,
-    marginTop: 8,
     padding: 10,
-    backgroundColor: '#FFF8E7',
-    borderRadius: 8,
+    backgroundColor: 'rgba(61,123,255,0.10)',
+    borderRadius: Glass.radius.sm,
     borderWidth: 1,
-    borderColor: '#F0E0B0',
+    borderColor: 'rgba(61,123,255,0.22)',
   },
-  intentText: { fontSize: 12, color: '#6B4F2A', lineHeight: 17 },
+  intentText: { fontSize: 12, color: Glass.ink.lightSecondary, lineHeight: 17 },
   pinEditor: {
-    marginHorizontal: 16,
-    marginTop: 8,
-    padding: 12,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E6E6E6',
+    paddingTop: 4,
     gap: 8,
   },
   pinRow: {
@@ -351,57 +408,57 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  pinText: { flex: 1, fontSize: 13, color: '#333', fontWeight: '600' },
+  pinText: { flex: 1, fontSize: 13, color: SellerTheme.text, fontWeight: '600' },
   pinAddRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   pinInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 8,
+    borderColor: Glass.stroke.lightOuter,
+    borderRadius: Glass.radius.sm,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    color: '#111',
+    color: SellerTheme.text,
+    backgroundColor: Glass.fill.lightSoft,
   },
   pinAddBtn: {
-    backgroundColor: '#1D3557',
-    borderRadius: 8,
+    backgroundColor: Glass.tint.blue,
+    borderRadius: Glass.radius.pill,
     paddingHorizontal: 14,
     justifyContent: 'center',
   },
   pinAddText: { color: '#fff', fontWeight: '800' },
   emptyWrap: { alignItems: 'center', marginTop: 48, gap: 8 },
-  empty: { textAlign: 'center', color: '#888', fontStyle: 'italic' },
+  empty: { textAlign: 'center', color: SellerTheme.textSecondary },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E6E6E6',
+    borderRadius: Glass.radius.md,
     marginBottom: 12,
   },
-  q: { fontSize: 15, fontWeight: '700', color: '#111', marginBottom: 6 },
-  notes: { fontSize: 13, color: '#777', marginBottom: 8 },
+  cardContent: {
+    padding: 14,
+  },
+  q: { fontSize: 15, fontWeight: '700', color: SellerTheme.text, marginBottom: 6 },
+  notes: { fontSize: 13, color: SellerTheme.textSecondary, marginBottom: 8 },
   input: {
     borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 8,
+    borderColor: Glass.stroke.lightOuter,
+    borderRadius: Glass.radius.sm,
     padding: 10,
     minHeight: 52,
     textAlignVertical: 'top',
     marginBottom: 8,
-    color: '#111',
+    color: SellerTheme.text,
+    backgroundColor: Glass.fill.lightSoft,
   },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
   replyChip: {
-    backgroundColor: '#EEF2F7',
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
   },
-  replyChipText: { fontSize: 12, fontWeight: '700', color: '#1D3557' },
+  replyChipText: { fontSize: 12, fontWeight: '700', color: SellerTheme.text },
   btn: {
-    backgroundColor: '#1D3557',
-    borderRadius: 8,
+    backgroundColor: Glass.tint.blue,
+    borderRadius: Glass.radius.pill,
     paddingVertical: 10,
     alignItems: 'center',
   },

@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Platform } from 'react-native';
 
 export interface VoiceRecordingState {
   isRecording: boolean;
@@ -30,7 +29,7 @@ export function useVoiceRecording(): VoiceRecordingState & VoiceRecordingControl
   
   // Use expo-av for recording
   const recordingRef = useRef<Audio.Recording | null>(null);
-  const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startDurationTimer = () => {
     durationIntervalRef.current = setInterval(() => {

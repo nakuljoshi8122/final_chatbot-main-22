@@ -1,5 +1,27 @@
 [
   {
+    "id": "q_826ebd548c",
+    "store_id": "store_atelier_craft",
+    "question": "earrings",
+    "notes": "auto: no catalog match from search_kb",
+    "session_id": "s",
+    "status": "open",
+    "answer": "",
+    "created_at": "2026-07-21T12:24:05.385499+00:00",
+    "updated_at": "2026-07-21T12:24:05.385507+00:00"
+  },
+  {
+    "id": "q_ef93b96acb",
+    "store_id": "store_atelier_craft",
+    "question": "quantum flux capacitor blueprints",
+    "notes": "auto: no catalog match from search_kb",
+    "session_id": "s",
+    "status": "open",
+    "answer": "",
+    "created_at": "2026-07-21T12:24:05.284075+00:00",
+    "updated_at": "2026-07-21T12:24:05.284085+00:00"
+  },
+  {
     "id": "q_d3aeba5f0c",
     "store_id": "store_atelier_craft",
     "question": "show me beard man",

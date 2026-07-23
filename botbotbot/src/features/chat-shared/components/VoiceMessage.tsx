@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useVoicePlayback } from '@/shared/hooks/useVoicePlayback';
+import { Glass } from '@/shared/theme/LiquidGlass';
 
 interface VoiceMessageProps {
   isUser: boolean;
@@ -78,7 +79,7 @@ export default function VoiceMessage({
             <Ionicons
               name={isPlaying && !isPaused ? 'pause' : 'play'}
               size={20}
-              color={isUser ? '#fff' : '#000'}
+              color={isUser ? '#fff' : Glass.ink.light}
             />
           </TouchableOpacity>
 
@@ -97,7 +98,7 @@ export default function VoiceMessage({
                       styles.waveformBar,
                       {
                         height,
-                        backgroundColor: isUser ? 'rgba(255,255,255,0.7)' : '#000',
+                        backgroundColor: isUser ? 'rgba(255,255,255,0.76)' : Glass.tint.blue,
                         opacity: index < (progress / 5) ? 1 : 0.3,
                       },
                     ]}
@@ -113,7 +114,7 @@ export default function VoiceMessage({
           </View>
 
           {/* Duration */}
-          <Text style={[styles.duration, { color: isUser ? 'rgba(255,255,255,0.8)' : '#8e8e8e' }]}>
+          <Text style={[styles.duration, { color: isUser ? 'rgba(255,255,255,0.8)' : Glass.ink.lightSecondary }]}>
             {formatTime(duration)}
           </Text>
 
@@ -128,9 +129,9 @@ export default function VoiceMessage({
             <Ionicons
               name={showTranscription ? 'chevron-up' : 'chevron-down'}
               size={16}
-              color={isUser ? 'rgba(255,255,255,0.7)' : '#8e8e8e'}
+              color={isUser ? 'rgba(255,255,255,0.7)' : Glass.ink.lightSecondary}
             />
-            <Text style={[styles.transcriptionToggleText, { color: isUser ? 'rgba(255,255,255,0.7)' : '#8e8e8e' }]}>
+            <Text style={[styles.transcriptionToggleText, { color: isUser ? 'rgba(255,255,255,0.7)' : Glass.ink.lightSecondary }]}>
               {showTranscription ? 'Hide' : 'Show'} transcription
             </Text>
           </TouchableOpacity>
@@ -139,14 +140,14 @@ export default function VoiceMessage({
         {/* Transcription Text */}
         {showTranscription && transcribedText && (
           <View style={styles.transcriptionContainer}>
-            <Text style={[styles.transcriptionText, { color: isUser ? 'rgba(255,255,255,0.9)' : '#000' }]}>
+            <Text style={[styles.transcriptionText, { color: isUser ? 'rgba(255,255,255,0.9)' : Glass.ink.light }]}>
               {transcribedText}
             </Text>
           </View>
         )}
 
         {/* Timestamp */}
-        <Text style={[styles.timestamp, { color: isUser ? 'rgba(255,255,255,0.7)' : '#8e8e8e' }]}>
+        <Text style={[styles.timestamp, { color: isUser ? 'rgba(255,255,255,0.7)' : Glass.ink.lightSecondary }]}>
           {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
       </View>
@@ -168,25 +169,18 @@ const styles = StyleSheet.create({
     maxWidth: '80%',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderRadius: Glass.radius.md,
+    ...Glass.shadowSoft,
   },
   userBubble: {
-    backgroundColor: '#000',
+    backgroundColor: 'rgba(61,123,255,0.92)',
     borderBottomRightRadius: 4,
   },
   botBubble: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.72)',
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: '#e1e1e1',
+    borderColor: Glass.stroke.lightOuter,
   },
   voiceControls: {
     flexDirection: 'row',
@@ -205,7 +199,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   botPlayButton: {
-    backgroundColor: 'rgba(0,123,255,0.1)',
+    backgroundColor: 'rgba(61,123,255,0.14)',
   },
   waveformContainer: {
     flex: 1,
@@ -225,12 +219,12 @@ const styles = StyleSheet.create({
   },
   progressContainer: {
     height: 2,
-    backgroundColor: 'rgba(0,0,0,0.1)',
+    backgroundColor: 'rgba(24,30,54,0.12)',
     borderRadius: 1,
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#000',
+    backgroundColor: Glass.tint.blue,
     borderRadius: 1,
   },
   duration: {
@@ -249,8 +243,8 @@ const styles = StyleSheet.create({
   transcriptionContainer: {
     marginBottom: 8,
     padding: 8,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: Glass.radius.xs,
   },
   transcriptionText: {
     fontSize: 14,

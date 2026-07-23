@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,27 +8,27 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiService, ChatMessage } from '@/services/api-fetch';
 import {
   clearStoredSessionId,
   loadStoredSessionId,
   saveStoredSessionId,
 } from '@/shared/utils/chatSession';
-import { parseAgentResponse } from '@/shared/utils/parseTiles';
+import { parseAgentResponse, TileProduct } from '@/shared/utils/parseTiles';
 import { ProductTileGrid } from '@/features/chat-shared/components/ProductTileCard';
 import BuyerTileDetailModal, {
   ShelfProduct,
 } from '@/features/buyer/components/BuyerTileDetailModal';
-import { TileProduct } from '@/shared/utils/parseTiles';
 import { useApp } from '@/contexts/AppContext';
 import { useCart } from '@/contexts/CartContext';
 import { ThemedText } from '@/shared/ui/ThemedText';
 import TypingDots from '@/shared/ui/TypingDots';
 import { useKeyboardHeight } from '@/shared/hooks/useKeyboardHeight';
+import { GlassScreen, GlassPane } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 import BuyerNotifyFab from '@/features/buyer/components/BuyerNotifyFab';
 import {
   buildBuyerAlerts,
@@ -142,29 +142,32 @@ export default function BuyerShopChatScreen() {
     };
   }, [storeId, sessionKey, store?.name]);
 
-  useEffect(() => {
-    if (!sessionReady || !storeId) return;
-    let cancelled = false;
-    (async () => {
-      const [inbox, products] = await Promise.all([
-        fetchBuyerInbox(),
-        fetchStoreProducts(String(storeId), true),
-      ]);
-      if (cancelled) return;
-      setStoreProducts(products);
-      setBuyerAlerts(
-        buildBuyerAlerts({
-          storeId: String(storeId),
-          inbox,
-          products,
-          cartItems: cart.items,
-        }),
-      );
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionReady, storeId, cart.items]);
+  // Refresh live catalog on focus / mount (inventory may have changed without New Chat)
+  useFocusEffect(
+    useCallback(() => {
+      if (!sessionReady || !storeId) return;
+      let cancelled = false;
+      (async () => {
+        const [inbox, products] = await Promise.all([
+          fetchBuyerInbox(),
+          fetchStoreProducts(String(storeId), true),
+        ]);
+        if (cancelled) return;
+        setStoreProducts(products);
+        setBuyerAlerts(
+          buildBuyerAlerts({
+            storeId: String(storeId),
+            inbox,
+            products,
+            cartItems: cart.items,
+          }),
+        );
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [sessionReady, storeId, cart.items]),
+  );
 
   const openAlertProduct = (alert: BuyerAlert) => {
     const sku = String(alert.sku || '').toUpperCase();
@@ -235,10 +238,17 @@ export default function BuyerShopChatScreen() {
   };
 
   return (
+    <GlassScreen scheme="light">
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
+      <GlassPane
+        scheme="light"
+        intensity="regular"
+        radius={Glass.radius.lg}
+        style={styles.headerPane}
+        contentStyle={styles.header}
+      >
         <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-          <Ionicons name="arrow-back" size={22} color="#111" />
+          <Ionicons name="arrow-back" size={22} color={Glass.ink.light} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <ThemedText style={styles.name} numberOfLines={1}>
@@ -252,7 +262,7 @@ export default function BuyerShopChatScreen() {
             hitSlop={8}
             style={styles.shelfBtn}
           >
-            <Ionicons name="grid-outline" size={16} color="#1D3557" />
+            <Ionicons name="grid-outline" size={16} color={Glass.tint.blue} />
             <Text style={styles.shelfText}>Shelf</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -260,7 +270,7 @@ export default function BuyerShopChatScreen() {
             hitSlop={8}
             style={styles.cartBtn}
           >
-            <Ionicons name="cart-outline" size={22} color="#111" />
+            <Ionicons name="cart-outline" size={22} color={Glass.ink.light} />
             {cartCount > 0 ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{cartCount}</Text>
@@ -287,7 +297,7 @@ export default function BuyerShopChatScreen() {
             <Text style={styles.new}>New</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </GlassPane>
 
       <View style={styles.chatBody}>
         <ScrollView
@@ -318,21 +328,25 @@ export default function BuyerShopChatScreen() {
           ) : null}
         </ScrollView>
 
-        <View
+        <GlassPane
+          scheme="light"
+          intensity="regular"
+          radius={Glass.radius.xl}
           style={[
-            styles.inputRow,
+            styles.inputPane,
             {
-              paddingBottom:
+              marginBottom:
                 keyboardHeight > 0 ? 8 : Math.max(insets.bottom, 8),
             },
           ]}
+          contentStyle={styles.inputRow}
         >
           <TextInput
             style={styles.input}
             value={inputText}
             onChangeText={setInputText}
             placeholder="Ask about this shop's products…"
-            placeholderTextColor="#999"
+            placeholderTextColor={Glass.ink.lightTertiary}
             onSubmitEditing={send}
             onFocus={() => {
               setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
@@ -341,7 +355,7 @@ export default function BuyerShopChatScreen() {
           <TouchableOpacity style={styles.send} onPress={send}>
             <Ionicons name="arrow-up" size={18} color="#fff" />
           </TouchableOpacity>
-        </View>
+        </GlassPane>
         {/* iOS: push composer above keyboard. Android resize mode handles this. */}
         {Platform.OS === 'ios' && keyboardHeight > 0 ? (
           <View style={{ height: keyboardHeight }} />
@@ -367,43 +381,48 @@ export default function BuyerShopChatScreen() {
         />
       ) : null}
     </SafeAreaView>
+    </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  container: { flex: 1, backgroundColor: 'transparent' },
   chatBody: { flex: 1 },
   messages: { flex: 1 },
+  headerPane: {
+    marginHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 6,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
     gap: 8,
   },
   headerCenter: { flex: 1, alignItems: 'center' },
-  name: { fontSize: 16, fontWeight: '700', color: '#111' },
-  tag: { fontSize: 11, color: '#666', marginTop: 2 },
+  name: { fontSize: 16, fontWeight: '700', color: Glass.ink.light },
+  tag: { fontSize: 11, color: Glass.ink.lightSecondary, marginTop: 2 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   shelfBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#EAF0F7',
+    backgroundColor: 'rgba(61,123,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(61,123,255,0.22)',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: Glass.radius.pill,
   },
-  shelfText: { color: '#1D3557', fontWeight: '700', fontSize: 12 },
+  shelfText: { color: Glass.tint.blue, fontWeight: '700', fontSize: 12 },
   cartBtn: { padding: 2 },
   badge: {
     position: 'absolute',
     top: -4,
     right: -6,
-    backgroundColor: '#B00020',
+    backgroundColor: Glass.tint.red,
     borderRadius: 9,
     minWidth: 18,
     height: 18,
@@ -412,47 +431,61 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  new: { fontWeight: '700', color: '#1D3557', fontSize: 13 },
+  new: { fontWeight: '700', color: Glass.tint.blue, fontSize: 13 },
   bubble: {
     maxWidth: '88%',
-    borderRadius: 12,
+    borderRadius: Glass.radius.md,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  user: { alignSelf: 'flex-end', backgroundColor: '#111' },
+  user: {
+    alignSelf: 'flex-end',
+    backgroundColor: 'rgba(61,123,255,0.92)',
+    borderBottomRightRadius: 4,
+    ...(Glass.shadowSoft as object),
+  },
   bot: {
     alignSelf: 'flex-start',
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.72)',
     borderWidth: 1,
-    borderColor: '#E8E8E8',
+    borderColor: 'rgba(255,255,255,0.65)',
+    borderBottomLeftRadius: 4,
+    shadowColor: 'rgba(120,130,160,0.22)',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 1,
+    elevation: 1,
   },
-  text: { fontSize: 15, color: '#111', lineHeight: 21 },
-  typing: { color: '#888', fontStyle: 'italic', marginLeft: 8 },
+  text: { fontSize: 15, color: Glass.ink.light, lineHeight: 21 },
+  typing: { color: Glass.ink.lightTertiary, fontStyle: 'italic', marginLeft: 8 },
   typingBubble: { paddingVertical: 14, paddingHorizontal: 16 },
+  inputPane: {
+    marginHorizontal: 12,
+    marginTop: 4,
+  },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 10,
-    paddingTop: 8,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#EEE',
+    paddingVertical: 8,
   },
   input: {
     flex: 1,
-    backgroundColor: '#F3F3F3',
-    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.65)',
+    borderWidth: 1,
+    borderColor: Glass.stroke.light,
+    borderRadius: Glass.radius.pill,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 15,
-    color: '#111',
+    color: Glass.ink.light,
   },
   send: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#111',
+    backgroundColor: Glass.tint.blue,
     alignItems: 'center',
     justifyContent: 'center',
   },

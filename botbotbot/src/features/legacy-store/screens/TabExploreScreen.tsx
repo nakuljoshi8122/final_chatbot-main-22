@@ -14,6 +14,8 @@ import { Brand } from '@/shared/theme/Brand';
 import { useScreenInsets } from '@/shared/hooks/useScreenInsets';
 import { useStore } from '@/features/legacy-store/context/StoreContext';
 import { InventoryItem, loadInventory } from '@/services/inventoryStore';
+import { GlassPane, GlassScreen } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 
 export default function ExploreScreen() {
   const router = useRouter();
@@ -49,20 +51,23 @@ export default function ExploreScreen() {
 
   if (!ready || !store) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator color="#111" />
-      </View>
+      <GlassScreen scheme="light">
+        <View style={styles.loading}>
+          <ActivityIndicator color={Glass.ink.light} />
+        </View>
+      </GlassScreen>
     );
   }
 
   return (
+    <GlassScreen scheme="light">
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
+      <GlassPane scheme="light" intensity="regular" radius={0} flat contentStyle={styles.header}>
         <ThemedText type="title" style={styles.headerTitle}>
           Shop {store.label}
         </ThemedText>
         <ThemedText style={styles.headerSubtitle}>{store.tagline}</ThemedText>
-      </View>
+      </GlassPane>
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: contentBottomPadding }}
         showsVerticalScrollIndicator={false}
@@ -77,31 +82,33 @@ export default function ExploreScreen() {
           items.map((item) => (
             <TouchableOpacity
               key={item.id}
-              style={styles.card}
               activeOpacity={0.85}
               onPress={() =>
                 router.push({ pathname: '/product/[id]', params: { id: item.sku } })
               }
             >
-              {item.imageUri ? (
-                <Image source={{ uri: item.imageUri }} style={styles.thumb} />
-              ) : (
-                <View style={[styles.thumb, styles.thumbPlaceholder]} />
-              )}
-              <View style={styles.cardBody}>
-                <ThemedText style={styles.cardTitle} numberOfLines={2}>
-                  {item.name}
-                </ThemedText>
-                <ThemedText style={styles.cardMeta}>
-                  {item.price ? `$${String(item.price).replace(/^\$/, '')}` : 'Price TBA'} ·{' '}
-                  {item.category}
-                </ThemedText>
-              </View>
+              <GlassPane scheme="light" intensity="regular" noBlur flat style={styles.card} contentStyle={styles.cardContent}>
+                {item.imageUri ? (
+                  <Image source={{ uri: item.imageUri }} style={styles.thumb} />
+                ) : (
+                  <View style={[styles.thumb, styles.thumbPlaceholder]} />
+                )}
+                <View style={styles.cardBody}>
+                  <ThemedText style={styles.cardTitle} numberOfLines={2}>
+                    {item.name}
+                  </ThemedText>
+                  <ThemedText style={styles.cardMeta}>
+                    {item.price ? `$${String(item.price).replace(/^\$/, '')}` : 'Price TBA'} ·{' '}
+                    {item.category}
+                  </ThemedText>
+                </View>
+              </GlassPane>
             </TouchableOpacity>
           ))
         )}
       </ScrollView>
     </SafeAreaView>
+    </GlassScreen>
   );
 }
 
@@ -110,18 +117,15 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Brand.colors.background,
+    backgroundColor: 'transparent',
   },
   container: {
     flex: 1,
-    backgroundColor: Brand.colors.background,
+    backgroundColor: 'transparent',
   },
   header: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Brand.colors.border,
-    backgroundColor: Brand.colors.accent,
   },
   headerTitle: {
     fontSize: 24,
@@ -141,21 +145,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   card: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: Brand.colors.border,
-    borderRadius: 8,
     marginBottom: 12,
+    borderRadius: Glass.radius.md,
+  },
+  cardContent: {
+    flexDirection: 'row',
     overflow: 'hidden',
   },
   thumb: {
     width: 88,
     height: 88,
-    backgroundColor: '#eee',
+    backgroundColor: Glass.fill.lightSoft,
+    borderRadius: Glass.radius.sm,
   },
   thumbPlaceholder: {
-    backgroundColor: '#ddd',
+    backgroundColor: Glass.fill.light,
   },
   cardBody: {
     flex: 1,

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { Glass } from '@/shared/theme/LiquidGlass';
 
 type Props = {
   images: string[];
@@ -121,7 +122,7 @@ export default function ProductImageGallery({
             <Ionicons
               name="chevron-back"
               size={18}
-              color={index <= 0 ? 'rgba(255,255,255,0.35)' : '#fff'}
+              color={index <= 0 ? Glass.ink.lightTertiary : Glass.ink.light}
             />
           </Pressable>
           <Pressable
@@ -133,7 +134,7 @@ export default function ProductImageGallery({
             <Ionicons
               name="chevron-forward"
               size={18}
-              color={index >= list.length - 1 ? 'rgba(255,255,255,0.35)' : '#fff'}
+              color={index >= list.length - 1 ? Glass.ink.lightTertiary : Glass.ink.light}
             />
           </Pressable>
           <View style={styles.dots} pointerEvents="none">
@@ -170,7 +171,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.58)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.stroke.light,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
@@ -190,23 +193,27 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.45)',
+    backgroundColor: 'rgba(255,255,255,0.56)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(16,20,37,0.16)',
   },
   dotOn: {
-    backgroundColor: '#fff',
+    backgroundColor: Glass.tint.blue,
     width: 16,
   },
   countPill: {
     position: 'absolute',
     top: 10,
     right: 10,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(255,255,255,0.68)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.stroke.light,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
   },
   countText: {
-    color: '#fff',
+    color: Glass.ink.light,
     fontSize: 11,
     fontWeight: '700',
   },

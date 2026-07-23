@@ -36,6 +36,8 @@ import {
 import { fetchSellerProduct } from '@/services/storesApi';
 import type { InventoryStatus } from '@/shared/theme/SellerTheme';
 import { getProductDiscount, withDollar } from '@/shared/utils/productDiscount';
+import { GlassPane, GlassPill, GlassScreen } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 
 function resolveParam(value: string | string[] | undefined): string {
   if (!value) return '';
@@ -378,15 +380,18 @@ export default function InventoryEditScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator style={{ marginTop: 40 }} color={SellerTheme.textSecondary} />
-      </SafeAreaView>
+      <GlassScreen scheme="light">
+        <SafeAreaView style={styles.container}>
+          <ActivityIndicator style={{ marginTop: 40 }} color={SellerTheme.textSecondary} />
+        </SafeAreaView>
+      </GlassScreen>
     );
   }
 
   return (
+    <GlassScreen scheme="light">
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
+      <GlassPane scheme="light" intensity="regular" radius={0} flat contentStyle={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.headerBtn}>
           <Ionicons name="close" size={24} color={SellerTheme.text} />
         </TouchableOpacity>
@@ -401,7 +406,7 @@ export default function InventoryEditScreen() {
             {saving ? '…' : 'Save'}
           </Text>
         </TouchableOpacity>
-      </View>
+      </GlassPane>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -456,10 +461,11 @@ export default function InventoryEditScreen() {
               return (
                 <TouchableOpacity
                   key={cat}
-                  style={[styles.chip, active && styles.chipActive]}
                   onPress={() => setCategory(cat)}
                 >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{cat}</Text>
+                  <GlassPill scheme="light" active={active} style={styles.chip}>
+                    <Text style={[styles.chipText, active && styles.chipTextActive]}>{cat}</Text>
+                  </GlassPill>
                 </TouchableOpacity>
               );
             })}
@@ -520,21 +526,22 @@ export default function InventoryEditScreen() {
           <Text style={styles.label}>Status</Text>
           <View style={styles.chips}>
             {status === 'trash' ? (
-              <View style={[styles.chip, styles.chipActive]}>
+              <GlassPill scheme="light" active style={styles.chip}>
                 <Text style={[styles.chipText, styles.chipTextActive]}>Trash</Text>
-              </View>
+              </GlassPill>
             ) : (
               (['active', 'draft'] as const).map((s) => {
                 const active = status === s;
                 return (
                   <TouchableOpacity
                     key={s}
-                    style={[styles.chip, active && styles.chipActive]}
                     onPress={() => setStatus(s)}
                   >
-                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                      {s === 'active' ? 'Active' : 'Draft'}
-                    </Text>
+                    <GlassPill scheme="light" active={active} style={styles.chip}>
+                      <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                        {s === 'active' ? 'Active' : 'Draft'}
+                      </Text>
+                    </GlassPill>
                   </TouchableOpacity>
                 );
               })
@@ -587,13 +594,14 @@ export default function InventoryEditScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+    </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: SellerTheme.bg,
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',
@@ -662,8 +670,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   input: {
-    backgroundColor: SellerTheme.surface,
-    borderRadius: SellerTheme.radiusSm,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: Glass.radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: SellerTheme.border,
     paddingHorizontal: 14,
     paddingVertical: 12,
     color: SellerTheme.text,
@@ -683,11 +693,6 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: SellerTheme.chipIdle,
-  },
-  chipActive: {
-    backgroundColor: SellerTheme.chipActive,
   },
   chipText: {
     color: SellerTheme.textSecondary,
@@ -699,21 +704,21 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     marginTop: 12,
-    backgroundColor: SellerTheme.chipActive,
-    borderRadius: 14,
+    backgroundColor: SellerTheme.accent,
+    borderRadius: Glass.radius.pill,
     paddingVertical: 14,
     alignItems: 'center',
   },
   saveButtonText: {
-    color: SellerTheme.chipActiveText,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },
   deleteButton: {
     marginTop: 16,
     marginBottom: 24,
-    backgroundColor: '#B3261E',
-    borderRadius: 14,
+    backgroundColor: SellerTheme.danger,
+    borderRadius: Glass.radius.pill,
     paddingVertical: 14,
     alignItems: 'center',
     flexDirection: 'row',
@@ -728,7 +733,7 @@ const styles = StyleSheet.create({
   restoreButton: {
     marginTop: 16,
     backgroundColor: SellerTheme.chipActive,
-    borderRadius: 14,
+    borderRadius: Glass.radius.pill,
     paddingVertical: 14,
     alignItems: 'center',
     flexDirection: 'row',

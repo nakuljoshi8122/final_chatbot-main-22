@@ -1,6 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { tapHaptic } from '@/shared/utils/sellerHaptics';
+import { GlassPane } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
+import { SellerTheme } from '@/shared/theme/SellerTheme';
 
 export type MorningBriefStats = {
   lowStock: number;
@@ -77,7 +80,15 @@ export default function SellerMorningBrief({
     (stats.queries === 0 || done?.queries);
 
   return (
-    <View style={styles.wrap}>
+    <GlassPane
+      scheme="light"
+      intensity="regular"
+      radius={Glass.radius.lg}
+      noBlur
+      flat
+      style={styles.wrap}
+      contentStyle={styles.wrapContent}
+    >
       {!hideAiInline && narrative ? (
         <View style={styles.aiBox}>
           <Text style={styles.aiLabel}>AI brief</Text>
@@ -118,29 +129,32 @@ export default function SellerMorningBrief({
           <Text style={styles.done}>Done for today</Text>
         </TouchableOpacity>
       ) : null}
-    </View>
+    </GlassPane>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
+    marginTop: 12,
+  },
+  wrapContent: {
     paddingTop: 20,
     paddingBottom: 16,
-    paddingHorizontal: 2,
+    paddingHorizontal: 16,
     justifyContent: 'center',
   },
   aiBox: {
-    backgroundColor: '#F0F4FA',
-    borderRadius: 10,
+    backgroundColor: 'rgba(24,30,54,0.06)',
+    borderRadius: Glass.radius.md,
     padding: 12,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Glass.stroke.lightOuter,
   },
   aiLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#1D3557',
+    color: Glass.tint.blue,
     marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -148,13 +162,13 @@ const styles = StyleSheet.create({
   aiText: {
     fontSize: 13.5,
     lineHeight: 19,
-    color: '#334155',
+    color: SellerTheme.text,
     fontWeight: '500',
   },
   aiPriority: {
     marginTop: 8,
     fontSize: 12,
-    color: '#1B7A3D',
+    color: Glass.tint.green,
     fontWeight: '700',
   },
   bullets: {
@@ -170,18 +184,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
     lineHeight: 20,
-    color: '#9AA3AE',
+    color: SellerTheme.textSecondary,
     width: 10,
   },
   text: {
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
     lineHeight: 20,
-    color: '#8A929C',
+    color: SellerTheme.text,
     fontWeight: '500',
   },
   muted: {
-    color: '#B4BAC2',
+    color: SellerTheme.textSecondary,
   },
   doneHit: {
     marginTop: 14,
@@ -190,6 +204,6 @@ const styles = StyleSheet.create({
   done: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
-    color: '#A0A8B0',
+    color: Glass.tint.blue,
   },
 });

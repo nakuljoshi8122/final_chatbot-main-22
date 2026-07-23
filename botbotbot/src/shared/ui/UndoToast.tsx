@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text } from 'react-native';
+import { GlassPane } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 
 type Props = {
   message: string | null;
@@ -54,7 +56,7 @@ export default function UndoToast({
         },
       ]}
     >
-      <View style={styles.toast}>
+      <GlassPane scheme="light" intensity="strong" radius={Glass.radius.md} style={styles.toast} contentStyle={styles.toastContent}>
         <Text style={styles.text} numberOfLines={2}>
           {message}
         </Text>
@@ -73,7 +75,7 @@ export default function UndoToast({
             <Text style={styles.undo}>OK</Text>
           </Pressable>
         )}
-      </View>
+      </GlassPane>
     </Animated.View>
   );
 }
@@ -87,14 +89,15 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   toast: {
+    ...Glass.shadow,
+  },
+  toastContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#1C1C1E',
-    borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
-  text: { flex: 1, color: '#fff', fontSize: 14, fontWeight: '600' },
-  undo: { color: '#6CB4FF', fontWeight: '800', fontSize: 14 },
+  text: { flex: 1, color: Glass.ink.light, fontSize: 14, fontWeight: '600' },
+  undo: { color: Glass.tint.blue, fontWeight: '800', fontSize: 14 },
 });

@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { ChatTable } from '@/shared/utils/parseTiles';
+import { GlassPane } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 
 const URL_RE = /^https?:\/\//i;
 
@@ -57,7 +59,7 @@ export default function ChatTableView({ table }: ChatTableViewProps) {
   const cellFlex = { flex: 1, minWidth: 80 };
 
   return (
-    <View style={styles.wrapper}>
+    <GlassPane scheme="light" intensity="regular" noBlur flat style={styles.wrapper} contentStyle={styles.wrapperContent}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.table}>
           {table.headers.length > 0 && (
@@ -113,7 +115,7 @@ export default function ChatTableView({ table }: ChatTableViewProps) {
           ))}
         </View>
       </ScrollView>
-    </View>
+    </GlassPane>
   );
 }
 
@@ -141,6 +143,10 @@ const styles = StyleSheet.create({
   wrapper: {
     width: '100%',
     alignSelf: 'stretch',
+    borderRadius: Glass.radius.md,
+  },
+  wrapperContent: {
+    overflow: 'hidden',
   },
   scrollContent: {
     flexGrow: 1,
@@ -148,15 +154,11 @@ const styles = StyleSheet.create({
   },
   table: {
     width: '100%',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 6,
-    overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'transparent',
   },
   headerRow: {
     flexDirection: 'row',
-    backgroundColor: '#000000',
+    backgroundColor: 'rgba(16,20,37,0.90)',
   },
   headerCell: {
     fontSize: 13,
@@ -169,22 +171,22 @@ const styles = StyleSheet.create({
   },
   bodyRow: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.38)',
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: Glass.stroke.lightOuter,
   },
   bodyRowAlt: {
-    backgroundColor: '#F7F7F7',
+    backgroundColor: 'rgba(255,255,255,0.24)',
   },
   cellWrap: {
     borderRightWidth: 1,
-    borderRightColor: '#E0E0E0',
+    borderRightColor: Glass.stroke.lightOuter,
     justifyContent: 'center',
   },
   bodyCell: {
     fontSize: 13,
     lineHeight: 18,
-    color: '#000000',
+    color: Glass.ink.light,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
@@ -192,7 +194,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   linkCell: {
-    color: '#000000',
+    color: Glass.tint.blue,
     textDecorationLine: 'underline',
     fontWeight: '600',
   },

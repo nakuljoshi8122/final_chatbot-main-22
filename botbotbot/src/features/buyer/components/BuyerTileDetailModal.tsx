@@ -11,7 +11,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { BlurView } from 'expo-blur';
 import { Brand } from '@/shared/theme/Brand';
+import { Glass } from '@/shared/theme/LiquidGlass';
 import { useCart } from '@/contexts/CartContext';
 import { notifySubscribeApi } from '@/services/cartApi';
 import ProductImageGallery from '@/shared/ui/ProductImageGallery';
@@ -147,8 +149,14 @@ export default function BuyerTileDetailModal({ product, visible, onClose }: Prop
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
+          <BlurView
+            intensity={Glass.blur.strong}
+            tint="light"
+            style={StyleSheet.absoluteFill}
+          />
+          <View pointerEvents="none" style={styles.cardFill} />
           <Pressable style={styles.close} onPress={onClose} hitSlop={10}>
-            <Ionicons name="close" size={22} color="#111" />
+            <Ionicons name="close" size={22} color={Glass.ink.light} />
           </Pressable>
 
           <View style={styles.imageWrap}>
@@ -260,7 +268,7 @@ export default function BuyerTileDetailModal({ product, visible, onClose }: Prop
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(20,24,40,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
@@ -269,9 +277,15 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 380,
     maxHeight: '85%',
-    backgroundColor: '#fff',
-    borderRadius: 18,
+    backgroundColor: 'transparent',
+    borderRadius: Glass.radius.xl,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: Glass.stroke.light,
     overflow: 'hidden',
+  },
+  cardFill: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Glass.fill.lightStrong,
   },
   close: {
     position: 'absolute',
@@ -281,7 +295,9 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.stroke.lightOuter,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -293,59 +309,61 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     bottom: 12,
-    backgroundColor: '#B00020',
+    backgroundColor: Glass.tint.red,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: Glass.radius.pill,
   },
   soldOutBadgeText: { color: '#fff', fontWeight: '800', fontSize: 11 },
   discountBadge: {
     position: 'absolute',
     top: 12,
     left: 12,
-    backgroundColor: '#C62828',
+    backgroundColor: Glass.tint.red,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 999,
+    borderRadius: Glass.radius.pill,
   },
   discountBadgeText: { color: '#fff', fontWeight: '900', fontSize: 11 },
   body: { padding: 16, gap: 10, paddingBottom: 22 },
-  name: { fontSize: 20, fontWeight: '800', color: '#111' },
-  price: { fontSize: 18, fontWeight: '800', color: Brand.colors.brandBlue },
+  name: { fontSize: 20, fontWeight: '800', color: Glass.ink.light },
+  price: { fontSize: 18, fontWeight: '800', color: Glass.tint.blue },
   priceRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
   originalPrice: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#C62828',
+    color: Glass.tint.red,
     textDecorationLine: 'line-through',
   },
-  salePrice: { fontSize: 20, fontWeight: '900', color: Brand.colors.brandBlue },
+  salePrice: { fontSize: 20, fontWeight: '900', color: Glass.tint.blue },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
-    backgroundColor: '#F2F2F2',
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    borderWidth: 1,
+    borderColor: Glass.stroke.lightOuter,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 999,
+    borderRadius: Glass.radius.pill,
   },
-  chipText: { fontSize: 12, fontWeight: '600', color: '#555' },
-  desc: { fontSize: 14, lineHeight: 20, color: '#444' },
+  chipText: { fontSize: 12, fontWeight: '600', color: Glass.ink.lightSecondary },
+  desc: { fontSize: 14, lineHeight: 20, color: Glass.ink.lightSecondary },
   btn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    borderRadius: 12,
+    borderRadius: Glass.radius.pill,
     paddingVertical: 13,
   },
-  buyBtn: { backgroundColor: '#1D3557' },
+  buyBtn: { backgroundColor: 'rgba(16,20,37,0.92)' },
   cartBtn: {
-    backgroundColor: '#fff',
-    borderWidth: 1.5,
-    borderColor: '#111',
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderWidth: 1,
+    borderColor: Glass.stroke.lightOuter,
   },
-  notifyBtn: { backgroundColor: '#6B4F2A' },
+  notifyBtn: { backgroundColor: 'rgba(16,20,37,0.92)' },
   btnTextLight: { color: '#fff', fontWeight: '800', fontSize: 15 },
-  btnTextDark: { color: '#111', fontWeight: '800', fontSize: 15 },
+  btnTextDark: { color: Glass.ink.light, fontWeight: '800', fontSize: 15 },
   viewLink: {
     flexDirection: 'row',
     alignItems: 'center',

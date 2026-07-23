@@ -18,6 +18,8 @@ export interface TileProduct {
   sku?: string;
   status?: string;
   quantity?: number;
+  /** When true, tapping selects this item for a pending chat edit (not detail modal). */
+  pick?: boolean;
   /** Extra product photos for gallery swipe. */
   images?: string[];
 }
@@ -111,6 +113,7 @@ function tileFromEntry(t: Record<string, unknown>, i: number): TileProduct | nul
       t.quantity !== undefined && t.quantity !== null && !Number.isNaN(Number(t.quantity))
         ? Number(t.quantity)
         : undefined,
+    pick: t.pick === true || String(t.tag || '').toUpperCase() === 'TAP TO PICK',
   };
 }
 

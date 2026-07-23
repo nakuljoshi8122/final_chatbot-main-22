@@ -14,6 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ThemedText } from '@/shared/ui/ThemedText';
 import { Brand } from '@/shared/theme/Brand';
+import { GlassScreen, GlassPane } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 import { useApp } from '@/contexts/AppContext';
 import { useCart } from '@/contexts/CartContext';
 import { fetchStoreProducts, ApiSellerProduct } from '@/services/storesApi';
@@ -79,6 +81,13 @@ export default function ShelfScreen() {
     const discount = getProductDiscount(item.price, item.list_price);
     return (
       <Pressable style={styles.tile} onPress={() => openTile(item)}>
+        <GlassPane
+          scheme="light"
+          intensity="regular"
+          radius={Glass.radius.md}
+          noBlur
+          flat
+        >
         <View style={styles.imageWrap}>
           {item.img ? (
             <Image source={{ uri: item.img }} style={styles.image} contentFit="cover" transition={120} />
@@ -112,15 +121,23 @@ export default function ShelfScreen() {
             <Text style={styles.lowStock}>Only {item.quantity} left</Text>
           ) : null}
         </View>
+        </GlassPane>
       </Pressable>
     );
   };
 
   return (
+    <GlassScreen scheme="light">
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
+      <GlassPane
+        scheme="light"
+        intensity="regular"
+        radius={Glass.radius.lg}
+        style={styles.headerPane}
+        contentStyle={styles.header}
+      >
         <Pressable onPress={() => router.back()} hitSlop={10}>
-          <Ionicons name="arrow-back" size={22} color="#111" />
+          <Ionicons name="arrow-back" size={22} color={Glass.ink.light} />
         </Pressable>
         <View style={styles.headerCenter}>
           <ThemedText style={styles.headerTitle} numberOfLines={1}>
@@ -129,18 +146,18 @@ export default function ShelfScreen() {
           <ThemedText style={styles.headerSub}>Shelf</ThemedText>
         </View>
         <Pressable onPress={() => router.push('/cart')} hitSlop={10} style={styles.cartBtn}>
-          <Ionicons name="cart-outline" size={22} color="#111" />
+          <Ionicons name="cart-outline" size={22} color={Glass.ink.light} />
           {count > 0 ? (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{count}</Text>
             </View>
           ) : null}
         </Pressable>
-      </View>
+      </GlassPane>
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator color="#111" />
+          <ActivityIndicator color={Glass.ink.light} />
         </View>
       ) : products.length === 0 ? (
         <View style={styles.centered}>
@@ -169,30 +186,33 @@ export default function ShelfScreen() {
 
       <BuyerTileDetailModal product={selected} visible={modalOpen} onClose={closeModal} />
     </SafeAreaView>
+    </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  container: { flex: 1, backgroundColor: 'transparent' },
+  headerPane: {
+    marginHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 6,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
     gap: 8,
   },
   headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#111' },
-  headerSub: { fontSize: 11, color: '#666', marginTop: 2 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: Glass.ink.light },
+  headerSub: { fontSize: 11, color: Glass.ink.lightSecondary, marginTop: 2 },
   cartBtn: { padding: 2 },
   badge: {
     position: 'absolute',
     top: -4,
     right: -6,
-    backgroundColor: '#B00020',
+    backgroundColor: Glass.tint.red,
     borderRadius: 9,
     minWidth: 18,
     height: 18,
@@ -207,19 +227,14 @@ const styles = StyleSheet.create({
   row: { gap: 10 },
   tile: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#ECECEC',
-    overflow: 'hidden',
     marginBottom: 10,
   },
-  imageWrap: { width: '100%', aspectRatio: 1, backgroundColor: Brand.colors.background },
+  imageWrap: { width: '100%', aspectRatio: 1, backgroundColor: 'rgba(255,255,255,0.45)' },
   image: { width: '100%', height: '100%' },
   imageFallback: { alignItems: 'center', justifyContent: 'center' },
   soldOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(20,24,40,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -232,28 +247,28 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: Glass.radius.xs,
   },
   discountBadge: {
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: '#C62828',
-    borderRadius: 999,
+    backgroundColor: Glass.tint.red,
+    borderRadius: Glass.radius.pill,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
   discountBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900' },
   tileBody: { padding: 10, gap: 3 },
-  name: { fontSize: 13, fontWeight: '700', color: '#111', lineHeight: 16 },
-  price: { fontSize: 13, fontWeight: '700', color: '#111' },
+  name: { fontSize: 13, fontWeight: '700', color: Glass.ink.light, lineHeight: 16 },
+  price: { fontSize: 13, fontWeight: '700', color: Glass.ink.light },
   priceRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 7 },
   originalPrice: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#C62828',
+    color: Glass.tint.red,
     textDecorationLine: 'line-through',
   },
-  salePrice: { fontSize: 13, fontWeight: '900', color: '#111' },
-  lowStock: { fontSize: 11, color: '#B00020', fontWeight: '600' },
+  salePrice: { fontSize: 13, fontWeight: '900', color: Glass.tint.blue },
+  lowStock: { fontSize: 11, color: Glass.tint.red, fontWeight: '600' },
 });

@@ -105,6 +105,18 @@ async def ai_batch_photos(body: dict):
     )
 
 
+@router.post("/chat-suggestions")
+async def ai_chat_suggestions(body: dict):
+    from commerce.seller_ai import generate_chat_suggestions
+
+    b = body or {}
+    messages = b.get("messages") if isinstance(b.get("messages"), list) else []
+    return generate_chat_suggestions(
+        str(b.get("store_id") or ""),
+        messages,
+    )
+
+
 @router.post("/translate-reply")
 async def ai_translate_reply(body: dict):
     from commerce.seller_ai import translate_text

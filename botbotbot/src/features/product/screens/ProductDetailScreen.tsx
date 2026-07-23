@@ -12,6 +12,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Brand } from '@/shared/theme/Brand';
+import { GlassScreen, GlassPane } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 import { ProductCard } from '@/types/products';
 import { apiService } from '@/services/api-fetch';
 
@@ -110,21 +112,30 @@ export default function ProductDetailScreen() {
 
   if (!product) {
     return (
+      <GlassScreen scheme="light">
       <SafeAreaView style={styles.container}>
         <ActivityIndicator size="large" color={Brand.colors.primary} style={{ marginTop: 40 }} />
       </SafeAreaView>
+      </GlassScreen>
     );
   }
 
   return (
+    <GlassScreen scheme="light">
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
+      <GlassPane
+        scheme="light"
+        intensity="regular"
+        radius={Glass.radius.lg}
+        style={styles.headerPane}
+        contentStyle={styles.header}
+      >
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={Brand.colors.primary} />
+          <Ionicons name="arrow-back" size={24} color={Glass.ink.light} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Product</Text>
         <View style={styles.headerSpacer} />
-      </View>
+      </GlassPane>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {product.img && !imgError ? (
@@ -152,29 +163,50 @@ export default function ProductDetailScreen() {
         <Text style={styles.description}>{product.description}</Text>
 
         {product.features.length > 0 && (
-          <View style={styles.section}>
+          <GlassPane
+            scheme="light"
+            intensity="regular"
+            radius={Glass.radius.lg}
+            noBlur
+            style={styles.section}
+            contentStyle={styles.sectionContent}
+          >
             <Text style={styles.sectionTitle}>Highlights</Text>
             {product.features.map((feature, index) => (
               <View key={index} style={styles.featureRow}>
-                <Ionicons name="checkmark-circle" size={18} color={Brand.colors.primary} />
+                <Ionicons name="checkmark-circle" size={18} color={Glass.tint.teal} />
                 <Text style={styles.featureText}>{feature}</Text>
               </View>
             ))}
-          </View>
+          </GlassPane>
         )}
 
         {product.sizes && product.sizes.length > 0 && (
-          <View style={styles.section}>
+          <GlassPane
+            scheme="light"
+            intensity="regular"
+            radius={Glass.radius.lg}
+            noBlur
+            style={styles.section}
+            contentStyle={styles.sectionContent}
+          >
             <Text style={styles.sectionTitle}>Available Sizes</Text>
             <Text style={styles.metaText}>{product.sizes.join(' · ')}</Text>
-          </View>
+          </GlassPane>
         )}
 
         {product.colors && product.colors.length > 0 && (
-          <View style={styles.section}>
+          <GlassPane
+            scheme="light"
+            intensity="regular"
+            radius={Glass.radius.lg}
+            noBlur
+            style={styles.section}
+            contentStyle={styles.sectionContent}
+          >
             <Text style={styles.sectionTitle}>Colors</Text>
             <Text style={styles.metaText}>{product.colors.join(' · ')}</Text>
-          </View>
+          </GlassPane>
         )}
 
         <TouchableOpacity style={styles.chatButton} onPress={() => router.push('/(tabs)/chat')}>
@@ -183,22 +215,25 @@ export default function ProductDetailScreen() {
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
+    </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Brand.colors.background,
+    backgroundColor: 'transparent',
+  },
+  headerPane: {
+    marginHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 6,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Brand.colors.border,
-    backgroundColor: Brand.colors.accent,
   },
   backButton: {
     padding: 4,
@@ -208,7 +243,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '700',
-    color: Brand.colors.primary,
+    color: Glass.ink.light,
   },
   headerSpacer: {
     width: 32,
@@ -220,38 +255,40 @@ const styles = StyleSheet.create({
   heroImage: {
     width: '100%',
     height: 220,
-    backgroundColor: Brand.colors.background,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderRadius: Glass.radius.lg,
     marginBottom: 16,
   },
   heroIcon: {
     width: 88,
     height: 88,
     borderWidth: 1,
-    borderColor: Brand.colors.border,
+    borderColor: Glass.stroke.lightOuter,
+    borderRadius: Glass.radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
     marginBottom: 16,
-    backgroundColor: Brand.colors.accent,
+    backgroundColor: 'rgba(255,255,255,0.62)',
   },
   category: {
     fontSize: 11,
     fontWeight: '700',
-    color: Brand.colors.muted,
+    color: Glass.ink.lightTertiary,
     letterSpacing: 0.6,
     textAlign: 'center',
   },
   name: {
     fontSize: 26,
     fontWeight: '800',
-    color: Brand.colors.primary,
+    color: Glass.ink.light,
     textAlign: 'center',
     marginTop: 6,
   },
   price: {
     fontSize: 22,
     fontWeight: '800',
-    color: Brand.colors.primary,
+    color: Glass.tint.blue,
     textAlign: 'center',
     marginTop: 8,
     marginBottom: 16,
@@ -259,17 +296,20 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 15,
     lineHeight: 22,
-    color: Brand.colors.highlight,
+    color: Glass.ink.lightSecondary,
     textAlign: 'center',
     marginBottom: 24,
   },
   section: {
     marginBottom: 20,
   },
+  sectionContent: {
+    padding: 16,
+  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: Brand.colors.primary,
+    color: Glass.ink.light,
     marginBottom: 10,
   },
   featureRow: {
@@ -282,18 +322,19 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     lineHeight: 20,
-    color: Brand.colors.highlight,
+    color: Glass.ink.lightSecondary,
   },
   metaText: {
     fontSize: 14,
-    color: Brand.colors.muted,
+    color: Glass.ink.lightSecondary,
     lineHeight: 20,
   },
   chatButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Brand.colors.primary,
+    backgroundColor: 'rgba(16,20,37,0.92)',
+    borderRadius: Glass.radius.pill,
     paddingVertical: 14,
     marginTop: 8,
     gap: 8,
