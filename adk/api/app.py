@@ -54,8 +54,58 @@ except ImportError:
 conversation_history = SessionHistory()
 
 
-def _inject_active_product_context(session_id: str, query: str) -> str:
-    return query
+def _inject_active_product_context(
+    session_id: str,
+    query: str,
+    *,
+    current_user_text: str = "",
+) -> str:
+    """Attach seller listing draft + recent item + buyer active-product hints."""
+    extra = ""
+    try:
+        from commerce.seller_listing_context import listing_context_line
+    except ImportError:
+        from commerce.seller_listing_context import listing_context_line
+    line = listing_context_line(session_id)
+    if line:
+        extra += line
+    try:
+        from commerce.seller_recent_item import recent_item_context_line
+    except ImportError:
+        from commerce.seller_recent_item import recent_item_context_line
+    # Prefer the raw current message so named products can override RECENT_ITEM
+    user_turn = (current_user_text or "").strip()
+    if not user_turn:
+        # history block ends with "User: …"
+        m = re.search(r"\nUser:\s*(.+)$", query or "", re.S)
+        user_turn = (m.group(1).strip() if m else query) or ""
+    recent = recent_item_context_line(session_id, current_query=user_turn)
+    if recent:
+        extra += recent
+    try:
+        from commerce.session_commerce import session_active_product
+    except ImportError:
+        from commerce.session_commerce import session_active_product
+    active = session_active_product.get(session_id)
+    if active and active.get("name"):
+        # Same override: don't push stale card when they named something else
+        try:
+            from commerce.seller_recent_item import _query_names_different_product
+        except ImportError:
+            from commerce.seller_recent_item import _query_names_different_product
+        fake_recent = {
+            "name": active.get("name"),
+            "sku": active.get("sku") or active.get("id"),
+        }
+        if not _query_names_different_product(user_turn, fake_recent):
+            extra += (
+                f" ACTIVE PRODUCT (recent card): {active.get('name')} "
+                f"(sku={active.get('sku') or active.get('id')}). "
+                "Field edits may refer to this item if not listing a new product."
+            )
+    if not extra:
+        return query
+    return f"{query.rstrip()}\n\n[CONTEXT]{extra}"
 
 
 def _store_category_hint(store: str | None, store_id: str | None) -> str:
@@ -135,6 +185,25 @@ def _inject_crm_session_id(
     img_line = ""
     if image_note:
         img_line = f" {image_note}"
+
+    # Live inventory fingerprint so the same chat re-queries after catalog edits
+    # without requiring New Chat. Old messages stay as-is; only future turns refresh.
+    catalog_line = ""
+    try:
+        from commerce.product_recommendations import inventory_revision
+        rev = inventory_revision()
+        catalog_line = (
+            f" CATALOG_REVISION: `{rev}`. Inventory/catalog may have changed since earlier "
+            "turns in this chat. ALWAYS re-call search_kb (buyer) or list_my_inventory / "
+            "list_low_stock_items (seller) before answering product/stock questions — "
+            "do not reuse stale product lists from prior assistant messages."
+        )
+    except Exception:
+        catalog_line = (
+            " ALWAYS re-call search_kb / inventory tools for product questions; "
+            "prior turns may be outdated after inventory edits."
+        )
+
     note = (
         f"\n\nSYSTEM NOTE: The current user's session_id is `{session_id}`. "
         "Pass this exact value as the session_id argument to get_contact, "
@@ -142,8 +211,10 @@ def _inject_crm_session_id(
         "Never invent a session_id. Use search_kb for product questions. "
         "When recommending products to buyers, put ONLY a short sentence plus the exact "
         "<TILES>[...]</TILES> block from search_kb. Never use markdown images "
-        "(![...](...)) or markdown links ([View Here](...))."
-        f"{store_line}{img_line}"
+        "(![...](...)) or markdown links ([View Here](...)). "
+        "If search_kb includes association upsells or correlated alternatives, include a "
+        "'You can also look at…' sentence and the exact TILES block."
+        f"{store_line}{catalog_line}{img_line}"
     )
     return f"{text.rstrip()}{note}"
 
@@ -220,6 +291,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 from api.routes import core, seller, stores, cart, seller_ai
 
 app.include_router(core.router)
@@ -274,12 +355,25 @@ async def ask(query: UserQuery, background_tasks: BackgroundTasks):
     try:
         logger.info(f"🤖 [ASK] Received query: '{query.query}' with session_id: {query.session_id}")
         
-        # Use provided session_id or create a new one
+        # External session_id = durable chat history / CRM / client identity.
+        # ADK gets a fresh internal session every turn so old tool results and
+        # recursively-injected transcripts cannot keep stale inventory answers alive.
+        # Visible messages are still loaded via build_llm_history_block(external_id).
         import uuid
         session_id = query.session_id or str(uuid.uuid4())
+        agent_session_id = f"turn-{uuid.uuid4().hex}"
         user_id = session_id  # device/session identity for ADK (POC)
-        logger.info(f"🆔 [ASK] Using session_id/user_id: {session_id}")
+        logger.info(
+            f"🆔 [ASK] external_session={session_id} agent_session={agent_session_id}"
+        )
         hydrate_session_state(session_id)
+
+        if (query.role or "").lower() == "seller" and query.listing_context:
+            try:
+                from commerce.seller_listing_context import ingest_client_listing_context
+            except ImportError:
+                from commerce.seller_listing_context import ingest_client_listing_context
+            ingest_client_listing_context(session_id, query.listing_context)
 
         try:
             try:
@@ -312,9 +406,13 @@ async def ask(query: UserQuery, background_tasks: BackgroundTasks):
 
         history_payload = build_llm_history_block(session_id, query.query)
         if history_payload:
-            contextual_query = _inject_active_product_context(session_id, history_payload)
+            contextual_query = _inject_active_product_context(
+                session_id, history_payload, current_user_text=query.query
+            )
         else:
-            contextual_query = _inject_active_product_context(session_id, query.query)
+            contextual_query = _inject_active_product_context(
+                session_id, query.query, current_user_text=query.query
+            )
         image_note = None
         if query.image_base64 and query.role == "seller":
             try:
@@ -398,51 +496,90 @@ async def ask(query: UserQuery, background_tasks: BackgroundTasks):
 
         user_message = types.Content(role='user', parts=[types.Part(text=contextual_query)])
         
-        # Create session if it doesn't exist, ignore if it already exists
+        # Ephemeral ADK session for this turn only (keeps Postgres chat history on session_id)
         try:
-            await active_sessions.create_session(user_id=user_id, session_id=session_id, app_name=active_app)
+            await active_sessions.create_session(
+                user_id=user_id,
+                session_id=agent_session_id,
+                app_name=active_app,
+            )
         except Exception:
-            # Session might already exist, that's okay
             pass
         
         response_text = ""
         captured_tiles_block = ""
+        captured_listing_draft: dict | None = None
         logger.info("🔄 [ASK] Starting agent processing...")
-        async for event in active_runner.run_async(user_id=user_id, session_id=session_id, new_message=user_message):
-            # Capture <TILES> emitted by tools (e.g. seller list_my_inventory) so we can
-            # re-attach them even if the LLM drops the block from its final text.
+        try:
+            async for event in active_runner.run_async(
+                user_id=user_id,
+                session_id=agent_session_id,
+                new_message=user_message,
+            ):
+                # Capture <TILES> emitted by tools (e.g. seller list_my_inventory) so we can
+                # re-attach them even if the LLM drops the block from its final text.
+                try:
+                    fn_responses = event.get_function_responses() or []
+                    for fr in fn_responses:
+                        resp = getattr(fr, "response", None)
+                        if isinstance(resp, dict):
+                            resp_text = str(resp.get("result", resp.get("output", resp)))
+                        else:
+                            resp_text = str(resp or "")
+                        m = re.search(r"<TILES>.*?</TILES>", resp_text, re.S)
+                        if m:
+                            captured_tiles_block = m.group(0)
+                        try:
+                            from commerce.seller_listing_context import extract_listing_draft
+                        except ImportError:
+                            from commerce.seller_listing_context import extract_listing_draft
+                        _, draft = extract_listing_draft(resp_text)
+                        if draft:
+                            captured_listing_draft = draft
+                except Exception:
+                    pass
+                if event.is_final_response() and event.content and event.content.parts:
+                    response_text = event.content.parts[0].text
+                    logger.info(f"✅ [ASK] Agent response: '{response_text}'")
+                    # Do not break — early cancel of ADK's async generator leaks OTEL context
+        finally:
+            # Drop the one-turn ADK session so inventory tool results do not accumulate
             try:
-                fn_responses = event.get_function_responses() or []
-                for fr in fn_responses:
-                    resp = getattr(fr, "response", None)
-                    if isinstance(resp, dict):
-                        resp_text = str(resp.get("result", resp.get("output", resp)))
-                    else:
-                        resp_text = str(resp or "")
-                    m = re.search(r"<TILES>.*?</TILES>", resp_text, re.S)
-                    if m:
-                        captured_tiles_block = m.group(0)
-            except Exception:
-                pass
-            if event.is_final_response() and event.content and event.content.parts:
-                response_text = event.content.parts[0].text
-                logger.info(f"✅ [ASK] Agent response: '{response_text}'")
-                # Do not break — early cancel of ADK's async generator leaks OTEL context
+                await active_sessions.delete_session(
+                    app_name=active_app,
+                    user_id=user_id,
+                    session_id=agent_session_id,
+                )
+            except Exception as del_err:
+                logger.debug("ADK turn session cleanup skipped: %s", del_err)
+
+        if captured_tiles_block:
+            # The model may echo the tiles itself, but with max_output_tokens it often
+            # truncates the JSON (no closing </TILES>). Always strip any model-emitted
+            # tiles and append the complete block captured from the tool output.
+            cleaned = re.sub(r"<TILES>.*?</TILES>", "", response_text or "", flags=re.S)
+            cleaned = re.sub(r"<TILES>.*$", "", cleaned, flags=re.S)  # truncated/unclosed
+            cleaned = cleaned.strip()
+            response_text = (
+                f"{cleaned}\n{captured_tiles_block}" if cleaned else captured_tiles_block
+            )
+
+        listing_meta = None
+        try:
+            from commerce.seller_listing_context import extract_listing_draft
+        except ImportError:
+            from commerce.seller_listing_context import extract_listing_draft
+        response_text, listing_meta = extract_listing_draft(response_text or "")
+        if not listing_meta and captured_listing_draft:
+            listing_meta = captured_listing_draft
 
         if (query.role or "").lower() == "seller":
-            # Seller replies may include product cards from list_my_inventory. If the
-            # model dropped the tool's <TILES> block, re-attach it so the app renders cards.
+            try:
+                from commerce.seller_response import sanitize_seller_response
+            except ImportError:
+                from commerce.seller_response import sanitize_seller_response
+            response_text = sanitize_seller_response(response_text or "")
             tile_meta = {}
-            if captured_tiles_block:
-                # The model may echo the tiles itself, but with max_output_tokens it often
-                # truncates the JSON (no closing </TILES>). Always strip any model-emitted
-                # tiles and append the complete block captured from the tool output.
-                cleaned = re.sub(r"<TILES>.*?</TILES>", "", response_text or "", flags=re.S)
-                cleaned = re.sub(r"<TILES>.*$", "", cleaned, flags=re.S)  # truncated/unclosed
-                cleaned = cleaned.strip()
-                response_text = (
-                    f"{cleaned}\n{captured_tiles_block}" if cleaned else captured_tiles_block
-                )
         else:
             try:
                 from commerce.boutique_response import sanitize_boutique_response
@@ -503,6 +640,8 @@ async def ask(query: UserQuery, background_tasks: BackgroundTasks):
         
         logger.info(f"🎯 [ASK] Returning response: '{response_text[:100]}...'")
         result = {"answer": response_text, "session_id": session_id}
+        if listing_meta:
+            result["listing_meta"] = listing_meta
         return result
     
     except Exception as e:
@@ -583,11 +722,14 @@ async def ask_voice(
                 logger.warning("OpenAI API key not configured. Using fallback transcription.")
                 transcribed_text = "Hello, I'd like to know about your products"
             
-            # Use provided session_id or create a new one
+            # External session for durable history; fresh ADK session per voice turn
             import uuid
             session_id = session_id or str(uuid.uuid4())
+            agent_session_id = f"turn-{uuid.uuid4().hex}"
             user_id = session_id  # device/session identity for ADK (POC)
-            logger.info(f"🆔 [VOICE] Using session_id/user_id: {session_id}")
+            logger.info(
+                f"🆔 [VOICE] external_session={session_id} agent_session={agent_session_id}"
+            )
             hydrate_session_state(session_id)
 
             # CRM writes run after the response so they never share ADK's OTEL context
@@ -600,9 +742,13 @@ async def ask_voice(
 
             history_payload = build_llm_history_block(session_id, transcribed_text)
             if history_payload:
-                contextual_query = _inject_active_product_context(session_id, history_payload)
+                contextual_query = _inject_active_product_context(
+                    session_id, history_payload, current_user_text=transcribed_text
+                )
             else:
-                contextual_query = _inject_active_product_context(session_id, transcribed_text)
+                contextual_query = _inject_active_product_context(
+                    session_id, transcribed_text, current_user_text=transcribed_text
+                )
             contextual_query = _inject_crm_session_id(session_id, contextual_query, store)
 
             logger.info(f"💬 [VOICE] History turns loaded for session: {session_id}")
@@ -610,17 +756,34 @@ async def ask_voice(
             
             user_message = types.Content(role='user', parts=[types.Part(text=contextual_query)])
             
-            # Create session if it doesn't exist
             try:
-                await session_service.create_session(user_id=user_id, session_id=session_id, app_name=APP_NAME)
+                await session_service.create_session(
+                    user_id=user_id,
+                    session_id=agent_session_id,
+                    app_name=APP_NAME,
+                )
             except Exception:
                 pass
             
             response_text = ""
-            async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=user_message):
-                if event.is_final_response() and event.content and event.content.parts:
-                    response_text = event.content.parts[0].text
-                    # Do not break — early cancel of ADK's async generator leaks OTEL context
+            try:
+                async for event in runner.run_async(
+                    user_id=user_id,
+                    session_id=agent_session_id,
+                    new_message=user_message,
+                ):
+                    if event.is_final_response() and event.content and event.content.parts:
+                        response_text = event.content.parts[0].text
+                        # Do not break — early cancel of ADK's async generator leaks OTEL context
+            finally:
+                try:
+                    await session_service.delete_session(
+                        app_name=APP_NAME,
+                        user_id=user_id,
+                        session_id=agent_session_id,
+                    )
+                except Exception as del_err:
+                    logger.debug("ADK voice turn session cleanup skipped: %s", del_err)
 
             try:
                 from commerce.boutique_response import sanitize_boutique_response

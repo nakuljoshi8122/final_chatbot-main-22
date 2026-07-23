@@ -1,8 +1,46 @@
 /** Shared API base + timed fetch so a bad IP never freezes the UI. */
 
-export const API_BASE = (
-  process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.135:8000'
-).replace(/\/$/, '');
+import Constants from 'expo-constants';
+
+/**
+ * Prefer the same LAN host Expo Go / Metro is already using.
+ * That way when Wi‑Fi DHCP changes the Mac IP, stores/chat still hit :8000
+ * without manually editing .env every time.
+ */
+function lanHostFromExpo(): string | null {
+  const candidates = [
+    Constants.expoConfig?.hostUri,
+    // Expo Go / legacy manifests
+    (Constants as { manifest2?: { extra?: { expoGo?: { debuggerHost?: string } } } })
+      .manifest2?.extra?.expoGo?.debuggerHost,
+    (Constants as { manifest?: { debuggerHost?: string } }).manifest?.debuggerHost,
+    Constants.linkingUri,
+  ];
+  for (const raw of candidates) {
+    const s = String(raw || '').trim();
+    if (!s) continue;
+    // "192.168.1.15:8081" | "exp://192.168.1.15:8081" | "http://192.168.1.15:8081"
+    const m = s.match(/(\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?/);
+    if (m?.[1] && m[1] !== '127.0.0.1') return m[1];
+  }
+  return null;
+}
+
+function resolveApiBase(): string {
+  const fromEnv = String(process.env.EXPO_PUBLIC_API_URL || '')
+    .trim()
+    .replace(/\/$/, '');
+  const lan = lanHostFromExpo();
+  if (lan) {
+    // Keep port from env when present (default 8000).
+    const portMatch = fromEnv.match(/:(\d+)\s*$/);
+    const port = portMatch?.[1] || '8000';
+    return `http://${lan}:${port}`;
+  }
+  return fromEnv || 'http://192.168.1.15:8000';
+}
+
+export const API_BASE = resolveApiBase();
 
 /**
  * Point `/product-images/...` at the current Expo API host.

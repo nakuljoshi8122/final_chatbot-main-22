@@ -14,6 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/shared/ui/ThemedText';
 import { Brand } from '@/shared/theme/Brand';
+import { GlassScreen, GlassPane } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 import { useApp } from '@/contexts/AppContext';
 import { useCart } from '@/contexts/CartContext';
 import { CartItem } from '@/services/cartApi';
@@ -83,20 +85,27 @@ export default function CartScreen() {
   };
 
   return (
+    <GlassScreen scheme="light">
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
+      <GlassPane
+        scheme="light"
+        intensity="regular"
+        radius={Glass.radius.lg}
+        style={styles.headerPane}
+        contentStyle={styles.header}
+      >
         <Pressable onPress={() => router.back()} hitSlop={10}>
-          <Ionicons name="arrow-back" size={22} color="#111" />
+          <Ionicons name="arrow-back" size={22} color={Glass.ink.light} />
         </Pressable>
         <ThemedText style={styles.headerTitle}>Your Cart</ThemedText>
         <Pressable onPress={onClear} hitSlop={10} disabled={!cart.items.length}>
           <Text style={[styles.clearText, !cart.items.length && styles.disabled]}>Clear</Text>
         </Pressable>
-      </View>
+      </GlassPane>
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator color="#111" />
+          <ActivityIndicator color={Glass.ink.light} />
         </View>
       ) : !cart.items.length ? (
         <View style={styles.centered}>
@@ -109,11 +118,20 @@ export default function CartScreen() {
             {groups.map(([storeId, items]) => (
               <View key={storeId} style={styles.group}>
                 <View style={styles.groupHeader}>
-                  <Ionicons name="storefront-outline" size={15} color="#666" />
+                  <Ionicons name="storefront-outline" size={15} color={Glass.ink.lightSecondary} />
                   <Text style={styles.groupTitle}>{storeName(storeId)}</Text>
                 </View>
                 {items.map((item) => (
-                  <View key={item.sku} style={styles.line}>
+                  <GlassPane
+                    key={item.sku}
+                    scheme="light"
+                    intensity="regular"
+                    radius={Glass.radius.md}
+                    noBlur
+                    flat
+                    style={styles.lineOuter}
+                    contentStyle={styles.line}
+                  >
                     {item.img ? (
                       <Image source={{ uri: item.img }} style={styles.thumb} contentFit="cover" />
                     ) : (
@@ -130,7 +148,7 @@ export default function CartScreen() {
                           onPress={() => changeQty(item, item.qty - 1)}
                           disabled={busySku === item.sku}
                         >
-                          <Ionicons name="remove" size={16} color="#111" />
+                          <Ionicons name="remove" size={16} color={Glass.ink.light} />
                         </Pressable>
                         <Text style={styles.qty}>{item.qty}</Text>
                         <Pressable
@@ -138,7 +156,7 @@ export default function CartScreen() {
                           onPress={() => changeQty(item, item.qty + 1)}
                           disabled={busySku === item.sku || (item.available ?? 0) <= 0}
                         >
-                          <Ionicons name="add" size={16} color="#111" />
+                          <Ionicons name="add" size={16} color={Glass.ink.light} />
                         </Pressable>
                       </View>
                     </View>
@@ -148,15 +166,21 @@ export default function CartScreen() {
                       disabled={busySku === item.sku}
                       style={styles.trash}
                     >
-                      <Ionicons name="trash-outline" size={18} color="#B00020" />
+                      <Ionicons name="trash-outline" size={18} color={Glass.tint.red} />
                     </Pressable>
-                  </View>
+                  </GlassPane>
                 ))}
               </View>
             ))}
           </ScrollView>
 
-          <View style={styles.footer}>
+          <GlassPane
+            scheme="light"
+            intensity="strong"
+            radius={Glass.radius.xl}
+            style={styles.footerPane}
+            contentStyle={styles.footer}
+          >
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Subtotal ({cart.count})</Text>
               <Text style={styles.totalValue}>${cart.subtotal.toFixed(2)}</Text>
@@ -172,74 +196,88 @@ export default function CartScreen() {
                 <Text style={styles.checkoutText}>Checkout</Text>
               )}
             </Pressable>
-          </View>
+          </GlassPane>
         </>
       )}
     </SafeAreaView>
+    </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  container: { flex: 1, backgroundColor: 'transparent' },
+  headerPane: {
+    marginHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 6,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
   },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: '#111' },
-  clearText: { color: '#B00020', fontWeight: '600', fontSize: 14 },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: Glass.ink.light },
+  clearText: { color: Glass.tint.red, fontWeight: '600', fontSize: 14 },
   disabled: { opacity: 0.35 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  emptyText: { color: Brand.colors.muted, fontSize: 15 },
+  emptyText: { color: Glass.ink.lightSecondary, fontSize: 15 },
   scroll: { padding: 12, paddingBottom: 24 },
   group: { marginBottom: 16 },
   groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  groupTitle: { fontSize: 13, fontWeight: '700', color: '#555' },
+  groupTitle: { fontSize: 13, fontWeight: '700', color: Glass.ink.lightSecondary },
+  lineOuter: { marginBottom: 8 },
   line: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 12,
     padding: 10,
     gap: 12,
-    marginBottom: 8,
     alignItems: 'center',
   },
-  thumb: { width: 64, height: 64, borderRadius: 8, backgroundColor: Brand.colors.background },
+  thumb: {
+    width: 64,
+    height: 64,
+    borderRadius: Glass.radius.sm,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
   thumbFallback: { alignItems: 'center', justifyContent: 'center' },
   lineBody: { flex: 1, gap: 4 },
-  lineName: { fontSize: 14, fontWeight: '700', color: '#111' },
-  linePrice: { fontSize: 13, color: '#111', fontWeight: '600' },
+  lineName: { fontSize: 14, fontWeight: '700', color: Glass.ink.light },
+  linePrice: { fontSize: 13, color: Glass.ink.light, fontWeight: '600' },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 4 },
   stepBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#D5D5D5',
+    borderColor: Glass.stroke.lightOuter,
+    backgroundColor: 'rgba(255,255,255,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  qty: { fontSize: 15, fontWeight: '700', color: '#111', minWidth: 18, textAlign: 'center' },
+  qty: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Glass.ink.light,
+    minWidth: 18,
+    textAlign: 'center',
+  },
   trash: { padding: 4 },
+  footerPane: {
+    marginHorizontal: 12,
+    marginBottom: 12,
+  },
   footer: {
     padding: 16,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#EEE',
     gap: 12,
   },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  totalLabel: { fontSize: 15, color: '#555', fontWeight: '600' },
-  totalValue: { fontSize: 20, fontWeight: '800', color: '#111' },
+  totalLabel: { fontSize: 15, color: Glass.ink.lightSecondary, fontWeight: '600' },
+  totalValue: { fontSize: 20, fontWeight: '800', color: Glass.ink.light },
   checkoutBtn: {
     height: 50,
-    borderRadius: 12,
-    backgroundColor: '#111',
+    borderRadius: Glass.radius.pill,
+    backgroundColor: 'rgba(16,20,37,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
   },

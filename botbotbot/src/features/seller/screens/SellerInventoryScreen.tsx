@@ -9,6 +9,7 @@ import {
   TextInput,
   Pressable,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -29,6 +30,8 @@ import {
 import { tapHaptic, successHaptic, warnHaptic } from '@/shared/utils/sellerHaptics';
 import { createInventoryItem } from '@/services/inventoryStore';
 import { getProductDiscount, withDollar } from '@/shared/utils/productDiscount';
+import { GlassPane, GlassPill } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 
 const FILTERS: { key: InventoryStatus | 'all'; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -75,6 +78,7 @@ export default function SellerInventoryScreen() {
   const [lowOnly, setLowOnly] = useState(false);
   const [log, setLog] = useState<ChangeLogEntry[]>([]);
   const [autoDraftSoldOut, setAutoDraftSoldOut] = useState(false);
+  const [showTools, setShowTools] = useState(false);
   const swipeRefs = useRef<Map<string, Swipeable | null>>(new Map());
 
   const load = useCallback(async () => {
@@ -506,78 +510,117 @@ export default function SellerInventoryScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.filters}>
-        {FILTERS.map((f) => (
-          <TouchableOpacity
-            key={f.key}
-            style={[styles.chip, filter === f.key && styles.chipOn]}
-            onPress={() => setFilter(f.key)}
-          >
-            <Text style={[styles.chipText, filter === f.key && styles.chipTextOn]}>
-              {f.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        <TouchableOpacity
-          style={[styles.chip, lowOnly && styles.chipOn]}
-          onPress={() => setLowOnly((v) => !v)}
+      <View style={styles.toolbar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filters}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={[styles.chipText, lowOnly && styles.chipTextOn]}>Low</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.chip, selectMode && styles.chipOn]}
-          onPress={() => {
-            setSelectMode((v) => !v);
-            setSelected(new Set());
-          }}
-        >
-          <Text style={[styles.chipText, selectMode && styles.chipTextOn]}>
-            {selectMode ? 'Done' : 'Select'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.toolRow}>
-        {lowOnly ? (
-          <TouchableOpacity
-            style={styles.toolBtn}
-            onPress={() => {
-              visible.forEach((i) => bumpQty(i, 5));
-              successHaptic();
-            }}
-          >
-            <Text style={styles.toolBtnText}>Restock visible +5</Text>
-          </TouchableOpacity>
-        ) : null}
-        <TouchableOpacity style={styles.toolBtn} onPress={priceRewriteVisible}>
-          <Text style={styles.toolBtnText}>Price rewrite</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.toolBtn}
-          onPress={async () => {
-            const next = !autoDraftSoldOut;
-            setAutoDraftSoldOut(next);
-            await saveStoreSettings(String(storeId), { autoDraftSoldOut: next });
-            setUndo({
-              message: next ? 'Auto-draft sold-out ON' : 'Auto-draft sold-out OFF',
-              apply: async () => undefined,
-            });
-          }}
-        >
-          <Text style={styles.toolBtnText}>
-            {autoDraftSoldOut ? 'Auto-draft ✓' : 'Auto-draft'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {log.length ? (
-        <View style={styles.logStrip}>
-          <Text style={styles.logTitle}>Recent</Text>
-          {log.slice(0, 3).map((e) => (
-            <Text key={e.id} style={styles.logLine} numberOfLines={1}>
-              {e.label}
-            </Text>
+          {FILTERS.map((f) => (
+            <TouchableOpacity key={f.key} onPress={() => setFilter(f.key)}>
+              <GlassPill
+                scheme="light"
+                active={filter === f.key}
+                activeColor={SellerTheme.chipActive}
+                style={styles.chip}
+              >
+                <Text style={[styles.chipText, filter === f.key && styles.chipTextOn]}>
+                  {f.label}
+                </Text>
+              </GlassPill>
+            </TouchableOpacity>
           ))}
+          <TouchableOpacity onPress={() => setLowOnly((v) => !v)}>
+            <GlassPill
+              scheme="light"
+              active={lowOnly}
+              activeColor={SellerTheme.chipActive}
+              style={styles.chip}
+            >
+              <Text style={[styles.chipText, lowOnly && styles.chipTextOn]}>Low</Text>
+            </GlassPill>
+          </TouchableOpacity>
+        </ScrollView>
+        <View style={styles.toolbarActions}>
+          <TouchableOpacity
+            onPress={() => {
+              setSelectMode((v) => !v);
+              setSelected(new Set());
+            }}
+            hitSlop={8}
+            style={styles.iconAction}
+          >
+            <Ionicons
+              name={selectMode ? 'checkmark-done' : 'checkbox-outline'}
+              size={20}
+              color={selectMode ? Glass.tint.blue : SellerTheme.text}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setShowTools((v) => !v)}
+            hitSlop={8}
+            style={styles.iconAction}
+          >
+            <Ionicons
+              name="options-outline"
+              size={20}
+              color={showTools ? Glass.tint.blue : SellerTheme.text}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {showTools ? (
+        <View style={styles.toolsPanel}>
+          <View style={styles.toolRow}>
+            {lowOnly ? (
+              <TouchableOpacity
+                onPress={() => {
+                  visible.forEach((i) => bumpQty(i, 5));
+                  successHaptic();
+                }}
+              >
+                <GlassPill scheme="light" style={styles.toolBtn}>
+                  <Text style={styles.toolBtnText}>Restock visible +5</Text>
+                </GlassPill>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity onPress={priceRewriteVisible}>
+              <GlassPill scheme="light" style={styles.toolBtn}>
+                <Text style={styles.toolBtnText}>Price rewrite</Text>
+              </GlassPill>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={async () => {
+                const next = !autoDraftSoldOut;
+                setAutoDraftSoldOut(next);
+                await saveStoreSettings(String(storeId), { autoDraftSoldOut: next });
+                setUndo({
+                  message: next ? 'Auto-draft sold-out ON' : 'Auto-draft sold-out OFF',
+                  apply: async () => undefined,
+                });
+              }}
+            >
+              <GlassPill scheme="light" active={autoDraftSoldOut} style={styles.toolBtn}>
+                <Text
+                  style={[styles.toolBtnText, autoDraftSoldOut && styles.toolBtnTextOn]}
+                >
+                  {autoDraftSoldOut ? 'Auto-draft ✓' : 'Auto-draft'}
+                </Text>
+              </GlassPill>
+            </TouchableOpacity>
+          </View>
+          {log.length ? (
+            <View style={styles.logStrip}>
+              <Text style={styles.logTitle}>Recent</Text>
+              {log.slice(0, 3).map((e) => (
+                <Text key={e.id} style={styles.logLine} numberOfLines={1}>
+                  {e.label}
+                </Text>
+              ))}
+            </View>
+          ) : null}
         </View>
       ) : null}
 
@@ -596,21 +639,21 @@ export default function SellerInventoryScreen() {
             <Text style={styles.bulkBarText}>Publish</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => void bulkOnSelected('trash')}>
-            <Text style={[styles.bulkBarText, { color: '#FF8A80' }]}>Trash</Text>
+            <Text style={[styles.bulkBarText, { color: Glass.tint.red }]}>Trash</Text>
           </TouchableOpacity>
         </View>
       ) : null}
 
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color="#fff" />
+        <ActivityIndicator style={{ marginTop: 40 }} color={Glass.ink.light} />
       ) : (
         <FlatList
           data={visible}
           keyExtractor={(item) => item.sku}
-          contentContainerStyle={{ padding: 12, paddingBottom: 80 }}
+          contentContainerStyle={{ padding: 12, paddingBottom: 100 }}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
-              <Ionicons name="cube-outline" size={40} color={SellerTheme.textSecondary} />
+              <Ionicons name="cube-outline" size={36} color={SellerTheme.textSecondary} />
               <Text style={styles.empty}>Nothing here yet</Text>
               <TouchableOpacity
                 style={styles.emptyCta}
@@ -618,7 +661,7 @@ export default function SellerInventoryScreen() {
                   router.replace(`/seller/${storeId}?openAdd=1` as never)
                 }
               >
-                <Ionicons name="add-circle" size={18} color="#fff" />
+                <Ionicons name="add" size={18} color="#fff" />
                 <Text style={styles.emptyCtaText}>Add product</Text>
               </TouchableOpacity>
             </View>
@@ -641,7 +684,14 @@ export default function SellerInventoryScreen() {
                 overshootLeft={false}
                 overshootRight={false}
               >
-                <View style={[styles.row, low && st === 'active' && styles.rowLow]}>
+                <GlassPane
+                  scheme="light"
+                  intensity="regular"
+                  noBlur
+                  flat
+                  style={[styles.row, low && st === 'active' && styles.rowLow]}
+                  contentStyle={styles.rowContent}
+                >
                   {selectMode ? (
                     <TouchableOpacity
                       style={styles.check}
@@ -650,7 +700,7 @@ export default function SellerInventoryScreen() {
                       <Ionicons
                         name={selected.has(item.sku) ? 'checkbox' : 'square-outline'}
                         size={22}
-                        color="#fff"
+                        color={SellerTheme.text}
                       />
                     </TouchableOpacity>
                   ) : null}
@@ -729,7 +779,7 @@ export default function SellerInventoryScreen() {
                             onPress={() => bumpQty(item, -1)}
                             disabled={busySku === item.sku}
                           >
-                            <Ionicons name="remove" size={14} color="#fff" />
+                            <Ionicons name="remove" size={14} color={SellerTheme.text} />
                           </TouchableOpacity>
                           <Text style={styles.qty}>{item.quantity ?? 0}</Text>
                           <TouchableOpacity
@@ -737,7 +787,7 @@ export default function SellerInventoryScreen() {
                             onPress={() => bumpQty(item, 1)}
                             disabled={busySku === item.sku}
                           >
-                            <Ionicons name="add" size={14} color="#fff" />
+                            <Ionicons name="add" size={14} color={SellerTheme.text} />
                           </TouchableOpacity>
                           {(item.quantity ?? 0) === 0 ? (
                             <TouchableOpacity
@@ -751,36 +801,49 @@ export default function SellerInventoryScreen() {
 
                         <View style={styles.statusRow}>
                           <TouchableOpacity
-                            style={[styles.statusChip, st === 'active' && styles.statusOn]}
                             onPress={() => setStatus(item, 'active')}
                           >
-                            <Text
-                              style={[
-                                styles.statusChipText,
-                                st === 'active' && styles.statusOnText,
-                              ]}
+                            <GlassPill
+                              scheme="light"
+                              active={st === 'active'}
+                              activeColor={SellerTheme.chipActive}
+                              style={styles.statusChip}
                             >
-                              Active
-                            </Text>
+                              <Text
+                                style={[
+                                  styles.statusChipText,
+                                  st === 'active' && styles.statusOnText,
+                                ]}
+                              >
+                                Active
+                              </Text>
+                            </GlassPill>
                           </TouchableOpacity>
                           <TouchableOpacity
-                            style={[styles.statusChip, st === 'draft' && styles.statusOn]}
                             onPress={() => setStatus(item, 'draft')}
                           >
-                            <Text
-                              style={[
-                                styles.statusChipText,
-                                st === 'draft' && styles.statusOnText,
-                              ]}
+                            <GlassPill
+                              scheme="light"
+                              active={st === 'draft'}
+                              activeColor={SellerTheme.chipActive}
+                              style={styles.statusChip}
                             >
-                              Draft
-                            </Text>
+                              <Text
+                                style={[
+                                  styles.statusChipText,
+                                  st === 'draft' && styles.statusOnText,
+                                ]}
+                              >
+                                Draft
+                              </Text>
+                            </GlassPill>
                           </TouchableOpacity>
                           <TouchableOpacity
-                            style={styles.statusChip}
                             onPress={() => void cloneVariants(item)}
                           >
-                            <Text style={styles.statusChipText}>Clone</Text>
+                            <GlassPill scheme="light" style={styles.statusChip}>
+                              <Text style={styles.statusChipText}>Clone</Text>
+                            </GlassPill>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -788,12 +851,21 @@ export default function SellerInventoryScreen() {
                       <Text style={styles.sub}>In trash</Text>
                     )}
                   </View>
-                </View>
+                </GlassPane>
               </Swipeable>
             );
           }}
         />
       )}
+
+      <TouchableOpacity
+        style={styles.addFab}
+        onPress={() => router.replace(`/seller/${storeId}?openAdd=1` as never)}
+        activeOpacity={0.85}
+        accessibilityLabel="Add product"
+      >
+        <Ionicons name="add" size={26} color="#fff" />
+      </TouchableOpacity>
 
       <UndoToast
         message={undo?.message ?? null}
@@ -805,15 +877,42 @@ export default function SellerInventoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: SellerTheme.bg },
-  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 12 },
+  container: { flex: 1, backgroundColor: 'transparent' },
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 8,
+    paddingRight: 4,
+    paddingTop: 4,
+    gap: 4,
+  },
+  filters: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  toolbarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingRight: 6,
+  },
+  iconAction: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toolsPanel: {
+    paddingBottom: 4,
+  },
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 16,
-    backgroundColor: SellerTheme.chipIdle,
+    borderRadius: Glass.radius.pill,
   },
-  chipOn: { backgroundColor: SellerTheme.chipActive },
   chipText: { color: SellerTheme.text, fontSize: 12, fontWeight: '600' },
   chipTextOn: { color: SellerTheme.chipActiveText },
   emptyWrap: { alignItems: 'center', marginTop: 48, gap: 10, paddingHorizontal: 24 },
@@ -822,31 +921,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#1D3557',
+    backgroundColor: Glass.tint.blue,
     paddingHorizontal: 18,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: Glass.radius.pill,
     marginTop: 8,
   },
   emptyCtaText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  addFab: {
+    position: 'absolute',
+    right: 18,
+    bottom: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: Glass.tint.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Glass.shadow,
+  },
   row: {
+    marginBottom: 10,
+    borderRadius: Glass.radius.md,
+  },
+  rowContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: SellerTheme.surface,
-    borderRadius: 12,
     padding: 10,
-    marginBottom: 10,
     gap: 10,
   },
-  rowLow: { borderWidth: 1, borderColor: '#8B3A3A' },
+  rowLow: { borderColor: Glass.tint.red },
   thumbWrap: { position: 'relative' },
-  thumb: { width: 56, height: 56, borderRadius: 8 },
+  thumb: { width: 56, height: 56, borderRadius: Glass.radius.sm },
   thumbPh: { backgroundColor: SellerTheme.surfaceElevated },
   discountBadge: {
     position: 'absolute',
     top: -5,
     right: -5,
-    backgroundColor: '#C62828',
+    backgroundColor: Glass.tint.red,
     borderRadius: 999,
     paddingHorizontal: 5,
     paddingVertical: 2,
@@ -855,26 +967,26 @@ const styles = StyleSheet.create({
   meta: { flex: 1, gap: 4 },
   name: { color: SellerTheme.text, fontWeight: '700', fontSize: 15 },
   sub: { color: SellerTheme.textSecondary, fontSize: 12 },
-  price: { color: '#6CB4FF', fontSize: 14, fontWeight: '700' },
+  price: { color: Glass.tint.blue, fontSize: 14, fontWeight: '700' },
   discountPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   originalPrice: {
-    color: '#FF6B6B',
+    color: Glass.tint.red,
     fontSize: 13,
     fontWeight: '700',
     textDecorationLine: 'line-through',
   },
   priceEdit: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  dollar: { color: '#6CB4FF', fontWeight: '800', fontSize: 14 },
+  dollar: { color: Glass.tint.blue, fontWeight: '800', fontSize: 14 },
   priceInput: {
     minWidth: 56,
-    color: '#fff',
+    color: SellerTheme.text,
     fontWeight: '700',
     fontSize: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#6CB4FF',
+    borderBottomColor: Glass.tint.blue,
     paddingVertical: 2,
   },
-  priceSave: { color: '#6CB4FF', fontWeight: '800', fontSize: 12, marginLeft: 6 },
+  priceSave: { color: Glass.tint.blue, fontWeight: '800', fontSize: 12, marginLeft: 6 },
   controls: { marginTop: 6, gap: 8 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   stepBtn: {
@@ -882,6 +994,8 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     backgroundColor: SellerTheme.stepperBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: SellerTheme.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -894,29 +1008,27 @@ const styles = StyleSheet.create({
   },
   restock10: {
     marginLeft: 4,
-    backgroundColor: '#1D3557',
+    backgroundColor: Glass.tint.blue,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: Glass.radius.pill,
   },
   restock10Text: { color: '#fff', fontWeight: '800', fontSize: 12 },
   statusRow: { flexDirection: 'row', gap: 6 },
   statusChip: {
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: SellerTheme.chipIdle,
+    borderRadius: Glass.radius.pill,
   },
-  statusOn: { backgroundColor: SellerTheme.chipActive },
-  statusChipText: { color: SellerTheme.textSecondary, fontSize: 11, fontWeight: '700' },
+  statusChipText: { color: SellerTheme.text, fontSize: 11, fontWeight: '700' },
   statusOnText: { color: SellerTheme.chipActiveText },
   swipePlus: {
-    backgroundColor: '#1B7A3D',
+    backgroundColor: Glass.tint.green,
     justifyContent: 'center',
     alignItems: 'center',
     width: 72,
     marginBottom: 10,
-    borderRadius: 12,
+    borderRadius: Glass.radius.md,
     gap: 2,
   },
   swipeDraft: {
@@ -925,7 +1037,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: 72,
     marginBottom: 10,
-    borderRadius: 12,
+    borderRadius: Glass.radius.md,
     gap: 2,
   },
   swipeText: { color: '#fff', fontWeight: '800', fontSize: 11 },
@@ -937,18 +1049,20 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   toolBtn: {
-    backgroundColor: SellerTheme.surfaceElevated,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    borderRadius: 8,
+    borderRadius: Glass.radius.pill,
   },
-  toolBtnText: { color: '#fff', fontWeight: '700', fontSize: 11 },
+  toolBtnText: { color: SellerTheme.text, fontWeight: '700', fontSize: 11 },
+  toolBtnTextOn: { color: SellerTheme.chipActiveText },
   logStrip: {
     marginHorizontal: 12,
     marginBottom: 8,
     padding: 8,
-    backgroundColor: SellerTheme.surface,
-    borderRadius: 8,
+    backgroundColor: Glass.fill.light,
+    borderRadius: Glass.radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.stroke.lightOuter,
     gap: 2,
   },
   logTitle: {
@@ -961,12 +1075,14 @@ const styles = StyleSheet.create({
   bulkBar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: '#1D3557',
+    backgroundColor: Glass.fill.lightStrong,
     marginHorizontal: 12,
     marginBottom: 8,
-    borderRadius: 10,
+    borderRadius: Glass.radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.stroke.lightOuter,
     paddingVertical: 10,
   },
-  bulkBarText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  bulkBarText: { color: SellerTheme.text, fontWeight: '800', fontSize: 13 },
   check: { paddingTop: 16, paddingRight: 4 },
 });

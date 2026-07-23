@@ -25,6 +25,9 @@ import {
 import { successHaptic, tapHaptic, warnHaptic } from '@/shared/utils/sellerHaptics';
 import ProductImageGallery from '@/shared/ui/ProductImageGallery';
 import { getProductDiscount } from '@/shared/utils/productDiscount';
+import { GlassPane, GlassPill } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
+import { SellerTheme } from '@/shared/theme/SellerTheme';
 
 type Props = {
   product: TileProduct | null;
@@ -36,9 +39,9 @@ type Props = {
 };
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  active: { bg: '#E4F6EA', text: '#1B7A3D', label: 'Active' },
-  draft: { bg: '#FEF3D7', text: '#9A6B00', label: 'Draft' },
-  trash: { bg: '#FBE3E1', text: '#B3261E', label: 'Trash' },
+  active: { bg: 'rgba(52,199,123,0.20)', text: Glass.tint.green, label: 'Active' },
+  draft: { bg: 'rgba(242,169,59,0.20)', text: Glass.tint.amber, label: 'Draft' },
+  trash: { bg: 'rgba(255,90,95,0.20)', text: Glass.tint.red, label: 'Trash' },
 };
 
 const PROMO_RATE = 0.1;
@@ -341,8 +344,15 @@ export default function SellerTileDetailModal({
       statusBarTranslucent
     >
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.handle} />
+        <Pressable style={styles.sheetPressable} onPress={(e) => e.stopPropagation()}>
+          <GlassPane
+            scheme="light"
+            intensity="strong"
+            radius={Glass.radius.xl}
+            style={styles.sheet}
+            contentStyle={styles.sheetContent}
+          >
+            <View style={styles.handle} />
 
           <View style={styles.imageWrap}>
             <ProductImageGallery images={gallery} height={200} borderRadius={16} />
@@ -368,7 +378,7 @@ export default function SellerTileDetailModal({
           >
             <View style={styles.headRow}>
               <Text style={styles.name}>{name}</Text>
-              {loading || busy ? <ActivityIndicator size="small" color="#888" /> : null}
+              {loading || busy ? <ActivityIndicator size="small" color={Glass.ink.lightSecondary} /> : null}
             </View>
 
             <View style={styles.priceBlock}>
@@ -389,7 +399,7 @@ export default function SellerTileDetailModal({
                   onChangeText={onPriceDraftChange}
                   keyboardType="decimal-pad"
                   placeholder="0"
-                  placeholderTextColor="#BBB"
+                  placeholderTextColor={SellerTheme.textSecondary}
                 />
                 <Pressable
                   style={({ pressed }) => [styles.miniSave, pressed && styles.pressed]}
@@ -422,7 +432,7 @@ export default function SellerTileDetailModal({
                   onPress={() => void bumpQty(-1)}
                   disabled={busy || qty <= 0}
                 >
-                  <Ionicons name="remove" size={18} color="#111" />
+                  <Ionicons name="remove" size={18} color={Glass.ink.light} />
                 </Pressable>
                 <Text style={styles.stepQty}>{qty}</Text>
                 <Pressable
@@ -430,7 +440,7 @@ export default function SellerTileDetailModal({
                   onPress={() => void bumpQty(1)}
                   disabled={busy}
                 >
-                  <Ionicons name="add" size={18} color="#111" />
+                  <Ionicons name="add" size={18} color={Glass.ink.light} />
                 </Pressable>
                 <Pressable
                   style={styles.restockBtn}
@@ -441,7 +451,7 @@ export default function SellerTileDetailModal({
                 </Pressable>
                 {qty === 0 || qty < 3 ? (
                   <Pressable
-                    style={[styles.restockBtn, { backgroundColor: '#1B7A3D' }]}
+                    style={[styles.restockBtn, { backgroundColor: Glass.tint.green }]}
                     onPress={async () => {
                       const next = soldOutHits >= 2 ? 20 : 10;
                       setQty(next);
@@ -467,29 +477,41 @@ export default function SellerTileDetailModal({
               <Text style={styles.actionLabel}>Sell more</Text>
               <View style={styles.chipRow}>
                 <Pressable
-                  style={[styles.actionChip, notifyCount > 0 && styles.actionChipHot]}
                   onPress={() => void notifyBuyers()}
                   disabled={busy}
                 >
-                  <Text
-                    style={[
-                      styles.actionChipText,
-                      notifyCount > 0 && styles.actionChipTextHot,
-                    ]}
+                  <GlassPill
+                    scheme="light"
+                    active={notifyCount > 0}
+                    activeColor={SellerTheme.chipActive}
+                    style={styles.actionChip}
                   >
-                    Notify buyers{notifyCount > 0 ? ` (${notifyCount})` : ''}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.actionChipText,
+                        notifyCount > 0 && styles.actionChipTextHot,
+                      ]}
+                    >
+                      Notify buyers{notifyCount > 0 ? ` (${notifyCount})` : ''}
+                    </Text>
+                  </GlassPill>
                 </Pressable>
                 <Pressable
-                  style={[styles.actionChip, hasPromo && styles.actionChipOn]}
                   onPress={() => void togglePromo()}
                   disabled={busy}
                 >
-                  <Text
-                    style={[styles.actionChipText, hasPromo && styles.actionChipTextOn]}
+                  <GlassPill
+                    scheme="light"
+                    active={hasPromo}
+                    activeColor={SellerTheme.chipActive}
+                    style={styles.actionChip}
                   >
-                    {hasPromo ? `${discount!.percentOff}% off` : '10% off'}
-                  </Text>
+                    <Text
+                      style={[styles.actionChipText, hasPromo && styles.actionChipTextOn]}
+                    >
+                      {hasPromo ? `${discount!.percentOff}% off` : '10% off'}
+                    </Text>
+                  </GlassPill>
                 </Pressable>
               </View>
             </View>
@@ -501,18 +523,24 @@ export default function SellerTileDetailModal({
                   {(['active', 'draft'] as const).map((s) => (
                     <Pressable
                       key={s}
-                      style={[styles.statusChip, status === s && styles.statusChipOn]}
                       onPress={() => void setStatusQuick(s)}
                       disabled={busy}
                     >
-                      <Text
-                        style={[
-                          styles.statusChipText,
-                          status === s && styles.statusChipTextOn,
-                        ]}
+                      <GlassPill
+                        scheme="light"
+                        active={status === s}
+                        activeColor={SellerTheme.chipActive}
+                        style={styles.statusChip}
                       >
-                        {s === 'active' ? 'Active' : 'Draft'}
-                      </Text>
+                        <Text
+                          style={[
+                            styles.statusChipText,
+                            status === s && styles.statusChipTextOn,
+                          ]}
+                        >
+                          {s === 'active' ? 'Active' : 'Draft'}
+                        </Text>
+                      </GlassPill>
                     </Pressable>
                   ))}
                 </View>
@@ -522,12 +550,12 @@ export default function SellerTileDetailModal({
             <View style={styles.metaRow}>
               {category ? (
                 <View style={styles.metaChip}>
-                  <Ionicons name="pricetag-outline" size={13} color="#555" />
+                  <Ionicons name="pricetag-outline" size={13} color={Glass.ink.lightSecondary} />
                   <Text style={styles.metaText}>{category}</Text>
                 </View>
               ) : null}
               <View style={styles.metaChip}>
-                <Ionicons name="barcode-outline" size={13} color="#555" />
+                <Ionicons name="barcode-outline" size={13} color={Glass.ink.lightSecondary} />
                 <Text style={styles.metaText}>{sku}</Text>
               </View>
             </View>
@@ -541,13 +569,15 @@ export default function SellerTileDetailModal({
               <Text style={styles.secondaryText}>Done</Text>
             </Pressable>
             <Pressable
-              style={({ pressed }) => [styles.ghostBtn, pressed && styles.pressed]}
               onPress={goEdit}
             >
-              <Ionicons name="create-outline" size={16} color="#1D3557" />
-              <Text style={styles.ghostText}>More fields</Text>
+              <GlassPill scheme="light" style={styles.ghostBtn}>
+                <Ionicons name="create-outline" size={16} color={Glass.tint.blue} />
+                <Text style={styles.ghostText}>More fields</Text>
+              </GlassPill>
             </Pressable>
           </View>
+          </GlassPane>
         </Pressable>
       </Pressable>
     </Modal>
@@ -557,16 +587,21 @@ export default function SellerTileDetailModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(6,8,18,0.6)',
     justifyContent: 'flex-end',
   },
+  sheetPressable: {
+    maxHeight: '88%',
+    flexShrink: 1,
+  },
   sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: Glass.radius.xl,
+    borderTopRightRadius: Glass.radius.xl,
+    flexShrink: 1,
+  },
+  sheetContent: {
     paddingHorizontal: 18,
     paddingBottom: 16,
-    maxHeight: '88%',
     flexShrink: 1,
   },
   handle: {
@@ -574,7 +609,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#DADADA',
+    backgroundColor: Glass.stroke.lightOuter,
     marginTop: 8,
     marginBottom: 6,
   },
@@ -584,9 +619,9 @@ const styles = StyleSheet.create({
     marginTop: 6,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#F2F2F2',
+    backgroundColor: Glass.fill.lightSoft,
   },
-  image: { width: '100%', height: 200, backgroundColor: '#F2F2F2' },
+  image: { width: '100%', height: 200, backgroundColor: Glass.fill.lightSoft },
   imageFallback: { alignItems: 'center', justifyContent: 'center' },
   statusBadge: {
     position: 'absolute',
@@ -599,7 +634,7 @@ const styles = StyleSheet.create({
   promoBadge: {
     left: undefined,
     right: 12,
-    backgroundColor: '#C62828',
+    backgroundColor: Glass.tint.red,
   },
   promoBadgeText: { fontSize: 12, fontWeight: '800', color: '#fff' },
   statusText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
@@ -610,54 +645,54 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 14,
   },
-  name: { flex: 1, fontSize: 20, fontWeight: '800', color: '#111' },
+  name: { flex: 1, fontSize: 20, fontWeight: '800', color: SellerTheme.text },
   priceBlock: { marginTop: 10, gap: 4 },
   promoPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   listPriceStrike: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#C62828',
+    color: Glass.tint.red,
     textDecorationLine: 'line-through',
   },
-  salePrice: { fontSize: 20, color: '#1D3557', fontWeight: '900' },
+  salePrice: { fontSize: 20, color: Glass.tint.blue, fontWeight: '900' },
   priceEditLabel: {
     fontSize: 11,
-    color: '#777',
+    color: SellerTheme.textSecondary,
     fontWeight: '700',
     marginTop: 4,
   },
-  promoHint: { fontSize: 12, color: '#1B7A3D', fontWeight: '600', marginTop: 2 },
+  promoHint: { fontSize: 12, color: Glass.tint.green, fontWeight: '600', marginTop: 2 },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 10,
     gap: 4,
   },
-  dollar: { fontSize: 22, fontWeight: '800', color: '#1D3557' },
+  dollar: { fontSize: 22, fontWeight: '800', color: Glass.tint.blue },
   priceInput: {
     flex: 1,
     fontSize: 22,
     fontWeight: '800',
-    color: '#1D3557',
+    color: SellerTheme.text,
     paddingVertical: 4,
   },
   miniSave: {
-    backgroundColor: '#EEF2F7',
+    backgroundColor: Glass.fill.light,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
   },
-  miniSaveText: { fontWeight: '800', color: '#1D3557', fontSize: 13 },
+  miniSaveText: { fontWeight: '800', color: Glass.tint.blue, fontSize: 13 },
   aiPriceBtn: {
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#E8F0FE',
+    backgroundColor: Glass.fill.light,
   },
-  aiPriceText: { fontWeight: '800', color: '#1D3557', fontSize: 12 },
+  aiPriceText: { fontWeight: '800', color: Glass.tint.blue, fontSize: 12 },
   pricingTip: {
     fontSize: 12,
-    color: '#555',
+    color: SellerTheme.textSecondary,
     marginTop: 6,
     fontStyle: 'italic',
     lineHeight: 17,
@@ -666,7 +701,7 @@ const styles = StyleSheet.create({
   actionLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#888',
+    color: SellerTheme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
@@ -676,76 +711,67 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#DDD',
+    borderColor: Glass.stroke.lightOuter,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: Glass.fill.light,
   },
   stepQty: {
     minWidth: 36,
     textAlign: 'center',
     fontSize: 20,
     fontWeight: '800',
-    color: '#111',
+    color: SellerTheme.text,
   },
   restockBtn: {
     marginLeft: 4,
-    backgroundColor: '#1D3557',
+    backgroundColor: Glass.tint.blue,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: Glass.radius.pill,
   },
   restockText: { color: '#fff', fontWeight: '800', fontSize: 14 },
-  roiHint: { fontSize: 12, color: '#9A6B00', fontWeight: '700' },
+  roiHint: { fontSize: 12, color: Glass.tint.amber, fontWeight: '700' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   actionChip: {
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#DDD',
-    backgroundColor: '#fff',
   },
-  actionChipHot: { borderColor: '#1D3557', backgroundColor: '#EEF2F7' },
-  actionChipOn: { backgroundColor: '#1D3557', borderColor: '#1D3557' },
-  actionChipText: { fontWeight: '700', color: '#444', fontSize: 13 },
-  actionChipTextHot: { color: '#1D3557' },
-  actionChipTextOn: { color: '#fff' },
+  actionChipText: { fontWeight: '700', color: SellerTheme.text, fontSize: 13 },
+  actionChipTextHot: { color: SellerTheme.chipActiveText },
+  actionChipTextOn: { color: SellerTheme.chipActiveText },
   statusRow: { flexDirection: 'row', gap: 8 },
   statusChip: {
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#DDD',
-    backgroundColor: '#fff',
   },
-  statusChipOn: { backgroundColor: '#1D3557', borderColor: '#1D3557' },
-  statusChipText: { fontWeight: '700', color: '#444', fontSize: 13 },
-  statusChipTextOn: { color: '#fff' },
+  statusChipText: { fontWeight: '700', color: SellerTheme.text, fontSize: 13 },
+  statusChipTextOn: { color: SellerTheme.chipActiveText },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 },
   metaChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#F4F4F5',
+    backgroundColor: Glass.fill.light,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
   },
-  metaText: { fontSize: 12, color: '#444', fontWeight: '600' },
+  metaText: { fontSize: 12, color: SellerTheme.textSecondary, fontWeight: '600' },
   footer: {
     flexDirection: 'row',
     gap: 10,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: Glass.stroke.lightOuter,
   },
   secondaryBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: '#1D3557',
+    borderRadius: Glass.radius.pill,
+    backgroundColor: Glass.tint.blue,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -756,9 +782,8 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: '#EEF2F7',
+    borderRadius: Glass.radius.pill,
   },
-  ghostText: { fontSize: 13, fontWeight: '700', color: '#1D3557' },
+  ghostText: { fontSize: 13, fontWeight: '700', color: Glass.tint.blue },
   pressed: { opacity: 0.85 },
 });

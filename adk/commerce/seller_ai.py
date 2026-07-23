@@ -501,6 +501,76 @@ def answer_store_analytics(store_id: str, question: str) -> dict[str, Any]:
     drafts = [r for r in rows if str(r.get("status") or "active") == "draft"]
     low = [r for r in active if int(r.get("quantity") or 0) < 3]
     orders = _load_json(BUYER_ORDERS_JSON)
+    q = (question or "").strip()
+    ql = q.lower()
+
+    # Browse / status / catalog dumps belong on product cards — not prose analytics.
+    browse_needles = (
+        "status update",
+        "status on",
+        "active listing",
+        "active product",
+        "show my",
+        "list my",
+        "list all",
+        "all items",
+        "all listing",
+        "my inventory",
+        "my products",
+        "my items",
+        "my listing",
+        "browse",
+        "what do i have",
+        "what's in my",
+        "whats in my",
+        "catalog",
+        "summarize the active",
+        "summarise the active",
+        "review my listing",
+        "go through my",
+    )
+    query_needles = (
+        "open quer",
+        "open question",
+        "buyer quer",
+        "buyer question",
+        "inbox",
+        "list them",
+        "list my open",
+        "show my open",
+        "what are my open",
+        "open it",
+    )
+    if any(n in ql for n in query_needles):
+        return {
+            "ok": True,
+            "redirect": "list_open_buyer_queries",
+            "answer": "Show open buyer questions in chat.",
+        }
+    if any(n in ql for n in browse_needles) and not (
+        ql.startswith("how many") and "draft" in ql
+    ):
+        status = "draft" if "draft" in ql else "trash" if "trash" in ql else "active"
+        if any(n in ql for n in ("low stock", "out of stock", "restock list")):
+            return {
+                "ok": True,
+                "redirect": "list_low_stock_items",
+                "answer": "Show low-stock cards.",
+            }
+        return {
+            "ok": True,
+            "redirect": "list_my_inventory",
+            "status": status,
+            "answer": f"Show {status} listings as cards.",
+        }
+    if any(n in ql for n in ("low stock", "out of stock", "running low")) and not ql.startswith(
+        "how many"
+    ):
+        return {
+            "ok": True,
+            "redirect": "list_low_stock_items",
+            "answer": "Show low-stock cards.",
+        }
 
     order_lines: Counter[str] = Counter()
     for buyer_orders in orders.values():
@@ -518,22 +588,26 @@ def answer_store_analytics(store_id: str, question: str) -> dict[str, Any]:
         "low_stock": len(low),
         "top_sellers": top_sellers,
         "open_queries": len(list_store_queries(store_id, "open")),
-        "restock_priorities": compute_restock_priorities(store_id)[:3],
+        "restock_priorities": [
+            {"name": p.get("name"), "reason": p.get("reason")}
+            for p in compute_restock_priorities(store_id)[:3]
+        ],
     }
 
     answer = _llm_text(
-        "Answer the seller's business question using ONLY the JSON data. 2-3 short sentences.",
-        f"Question: {question}\n\nData:\n{json.dumps(ctx, indent=2)}",
-        max_tokens=220,
+        "Answer the seller's business question using ONLY the JSON counts/insights. "
+        "1-2 short sentences. NEVER list every product, price, or stock line — "
+        "counts and top 1-3 names max.",
+        f"Question: {q}\n\nData:\n{json.dumps(ctx, indent=2)}",
+        max_tokens=120,
     )
 
     if not answer:
-        q = question.lower()
-        if "draft" in q:
+        if "draft" in ql:
             answer = f"You have {len(drafts)} draft{'s' if len(drafts) != 1 else ''} waiting to publish."
-        elif "low" in q or "stock" in q:
+        elif "low" in ql or "stock" in ql:
             answer = f"{len(low)} active item{'s' if len(low) != 1 else ''} are low on stock."
-        elif "best" in q or "sell" in q or "top" in q:
+        elif "best" in ql or "sell" in ql or "top" in ql:
             if top_sellers:
                 answer = f"Top seller: {top_sellers[0]['name']} ({top_sellers[0]['units']} units ordered)."
             else:
@@ -618,4 +692,302 @@ def analyze_batch_photos(
         "duplicate_groups": duplicate_groups,
         "tip": tip,
         "queue_count": len(items),
+    }
+
+
+# ── Chat next-action suggestions (Assist quick chips) ────────────────────
+
+
+def _parse_suggestion_list(raw: Optional[str]) -> list[dict[str, str]]:
+    if not raw:
+        return []
+    try:
+        text = re.sub(r"^```(?:json)?\s*", "", raw.strip())
+        text = re.sub(r"\s*```$", "", text)
+        data = json.loads(text)
+    except Exception:
+        return []
+    rows = data if isinstance(data, list) else data.get("suggestions") if isinstance(data, dict) else []
+    if not isinstance(rows, list):
+        return []
+    out: list[dict[str, str]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        message = str(row.get("message") or row.get("text") or "").strip()
+        label = str(row.get("label") or message).strip()
+        if not message:
+            continue
+        # Keep chip short; full prompt goes to the agent.
+        if len(label) > 48:
+            label = label[:45].rstrip() + "…"
+        out.append({"label": label, "message": message[:240]})
+        if len(out) >= 6:
+            break
+    return out
+
+
+def _stats_fallback_suggestions(
+    *,
+    low: list[dict[str, Any]],
+    drafts: list[dict[str, Any]],
+    queries: list[dict[str, Any]],
+    priorities: list[dict[str, Any]],
+    store_name: str,
+) -> list[dict[str, str]]:
+    """Day-start / empty-chat suggestions from shop stats."""
+    out: list[dict[str, str]] = []
+    if priorities:
+        name = str(priorities[0].get("name") or "top item")
+        out.append(
+            {
+                "label": f"Restock {name}?",
+                "message": f"What should I restock first? Focus on {name}.",
+            }
+        )
+    elif low:
+        name = str(low[0].get("name") or "low-stock items")
+        out.append(
+            {
+                "label": "Check low stock",
+                "message": f"Which items are low on stock? Start with {name}.",
+            }
+        )
+    if drafts:
+        out.append(
+            {
+                "label": f"Publish {len(drafts)} draft{'s' if len(drafts) != 1 else ''}",
+                "message": "Show my draft items so I can publish them.",
+            }
+        )
+    if queries:
+        out.append(
+            {
+                "label": f"List {len(queries)} buyer Qs",
+                "message": "List my open buyer questions.",
+            }
+        )
+    out.append(
+        {
+            "label": "Morning priorities",
+            "message": f"What should I focus on first today for {store_name or 'my store'}?",
+        }
+    )
+    out.append(
+        {
+            "label": "Add a product",
+            "message": "I want to add a new product — walk me through it.",
+        }
+    )
+    out.append(
+        {
+            "label": "Top sellers",
+            "message": "What sold best in my store recently?",
+        }
+    )
+    # Dedupe by message
+    seen: set[str] = set()
+    unique: list[dict[str, str]] = []
+    for s in out:
+        key = s["message"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(s)
+    return unique[:6]
+
+
+def _chat_fallback_suggestions(messages: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Heuristic next steps from recent chat keywords."""
+    blob = " ".join(
+        str(m.get("text") or "") for m in messages[-8:]
+    ).lower()
+    out: list[dict[str, str]] = []
+    if any(k in blob for k in ("draft", "publish")):
+        out.append(
+            {
+                "label": "Publish drafts",
+                "message": "Publish all my draft items to active.",
+            }
+        )
+    if any(
+        k in blob
+        for k in ("low stock", "low on stock", "restock", "quantity", "qty", "units")
+    ):
+        out.append(
+            {
+                "label": "Restock plan",
+                "message": "What should I restock first based on my inventory?",
+            }
+        )
+    if any(k in blob for k in ("price", "pricing", "discount")):
+        out.append(
+            {
+                "label": "Pricing tip",
+                "message": "Which of my items should I reprice, and why?",
+            }
+        )
+    if any(k in blob for k in ("buyer", "question", "inbox", "query", "open quer")):
+        out.append(
+            {
+                "label": "List open questions",
+                "message": "List my open buyer questions.",
+            }
+        )
+        out.append(
+            {
+                "label": "Draft a reply",
+                "message": "Draft a reply for my first open buyer question.",
+            }
+        )
+    if any(k in blob for k in ("add", "list", "new product", "photo")):
+        out.append(
+            {
+                "label": "Finish listing",
+                "message": "Help me finish listing the product we were working on.",
+            }
+        )
+    if any(k in blob for k in ("trash", "delete", "restore")):
+        out.append(
+            {
+                "label": "Check trash",
+                "message": "Show items in trash that I might want to restore.",
+            }
+        )
+    out.extend(
+        [
+            {
+                "label": "Show my items",
+                "message": "Show my active items.",
+            },
+            {
+                "label": "What's next?",
+                "message": "Based on what we just did, what should I do next in my store?",
+            },
+            {
+                "label": "Morning priorities",
+                "message": "What else should I tackle in the store today?",
+            },
+        ]
+    )
+    seen: set[str] = set()
+    unique: list[dict[str, str]] = []
+    for s in out:
+        key = s["message"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(s)
+    return unique[:6]
+
+
+def generate_chat_suggestions(
+    store_id: str,
+    messages: Optional[list[dict[str, Any]]] = None,
+) -> dict[str, Any]:
+    """Predict next seller actions for Assist chips.
+
+    Empty chat → day-start / shop-stats suggestions.
+    Ongoing chat → suggestions grounded in the latest turns.
+    """
+    sid = str(store_id or "").strip()
+    store = get_store(sid) or {}
+    store_name = str(store.get("name") or "your store")
+    rows = _active_products(sid)
+    queries = list_store_queries(sid, "open")
+    low = [
+        r
+        for r in rows
+        if str(r.get("status") or "active") == "active" and int(r.get("quantity") or 0) < 3
+    ]
+    drafts = [r for r in rows if str(r.get("status") or "active") == "draft"]
+    priorities = compute_restock_priorities(sid) if sid else []
+
+    msgs = [m for m in (messages or []) if isinstance(m, dict)]
+    # Keep only short transcript for the model
+    transcript = [
+        {
+            "role": "user" if m.get("isUser") or m.get("role") == "user" else "assistant",
+            "text": str(m.get("text") or "")[:400],
+        }
+        for m in msgs[-10:]
+        if str(m.get("text") or "").strip()
+    ]
+    has_chat = len(transcript) > 0
+
+    stats = {
+        "store": store_name,
+        "category": store.get("category") or "",
+        "lowStock": len(low),
+        "drafts": len(drafts),
+        "openQueries": len(queries),
+        "topRestock": [
+            {"name": p.get("name"), "reason": p.get("reason")} for p in priorities[:3]
+        ],
+        "lowNames": [str(r.get("name") or "") for r in low[:3]],
+        "draftNames": [str(r.get("name") or "") for r in drafts[:3]],
+    }
+
+    fallback = (
+        _chat_fallback_suggestions(msgs)
+        if has_chat
+        else _stats_fallback_suggestions(
+            low=low,
+            drafts=drafts,
+            queries=queries,
+            priorities=priorities,
+            store_name=store_name,
+        )
+    )
+
+    if has_chat:
+        system = (
+            "You help a boutique seller in Assist chat. "
+            "Given recent chat + shop stats, propose 4-5 SHORT next actions the seller "
+            "would likely tap next. Each suggestion must be a natural message the seller "
+            "would send to their store agent (imperative or question). "
+            "Prefer 'Show my active items' / 'Show drafts' / 'Which items are low on stock?' "
+            "over 'summarize listings' (cards show inventory — no text catalogs). "
+            "Return JSON only: "
+            '[{"label":"chip text ≤6 words","message":"full prompt to agent"}]. '
+            "No fluff. Ground in the conversation — do not repeat the last user message."
+        )
+        user = (
+            f"Stats: {json.dumps(stats)}\n"
+            f"Recent chat:\n{json.dumps(transcript, ensure_ascii=False)}"
+        )
+    else:
+        system = (
+            "You help a boutique seller starting their day in Assist. "
+            "Given shop stats, propose 4-5 SHORT first actions a seller would take "
+            "(restock, publish drafts, answer buyers, list a product, check sales). "
+            "Each suggestion is a message they send to their store agent. "
+            "Return JSON only: "
+            '[{"label":"chip text ≤6 words","message":"full prompt to agent"}]. '
+            "Prioritize urgent stats. No fluff."
+        )
+        user = f"Stats: {json.dumps(stats)}"
+
+    llm_rows = _parse_suggestion_list(_llm_text(system, user, max_tokens=320))
+    suggestions = llm_rows or fallback
+    if len(suggestions) < 3:
+        # Pad with fallback without duplicates
+        seen = {s["message"].lower() for s in suggestions}
+        for s in fallback:
+            if s["message"].lower() in seen:
+                continue
+            suggestions.append(s)
+            seen.add(s["message"].lower())
+            if len(suggestions) >= 5:
+                break
+
+    return {
+        "ok": True,
+        "mode": "chat" if has_chat else "day_start",
+        "suggestions": suggestions[:6],
+        "stats": {
+            "lowStock": len(low),
+            "drafts": len(drafts),
+            "queries": len(queries),
+        },
     }

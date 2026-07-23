@@ -152,6 +152,31 @@ export async function fetchAiBatchPhotos(
   }, 45000);
 }
 
+export async function fetchAiChatSuggestions(
+  storeId: string,
+  messages: { text: string; isUser: boolean }[],
+): Promise<{
+  ok?: boolean;
+  mode?: 'chat' | 'day_start';
+  suggestions?: { label: string; message: string }[];
+} | null> {
+  return getJson(
+    `${API_BASE}/seller/ai/chat-suggestions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        store_id: storeId,
+        messages: messages.slice(-10).map((m) => ({
+          text: m.text,
+          isUser: m.isUser,
+        })),
+      }),
+    },
+    15000,
+  );
+}
+
 export async function translateReplyText(
   text: string,
   targetLanguage: string,

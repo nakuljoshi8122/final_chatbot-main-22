@@ -385,6 +385,66 @@ def _score_chunk(query: str, chunk: str, intent: Optional[dict] = None) -> int:
     return score
 
 
+def _query_focus_terms(q_intent, query: str) -> set[str]:
+    """Buyer-facing terms that must ground a 'hit' (ignore store-domain filler)."""
+    terms: set[str] = set()
+    raw = (query or "").lower()
+    terms.update(t for t in re.findall(r"[a-z0-9]+", raw) if len(t) > 2 and t not in _STOPWORDS)
+    if q_intent is not None:
+        for val in (
+            getattr(q_intent, "corrected", None),
+            *(getattr(q_intent, "product_types", None) or []),
+            *(getattr(q_intent, "attributes", None) or []),
+            *(getattr(q_intent, "search_terms", None) or []),
+        ):
+            terms.update(
+                t
+                for t in re.findall(r"[a-z0-9]+", str(val or "").lower())
+                if len(t) > 2 and t not in _STOPWORDS
+            )
+    # Store domain words alone must not count as a product match
+    noise = {
+        "handicraft",
+        "handicrafts",
+        "apparel",
+        "apparels",
+        "clothing",
+        "skincare",
+        "jewellery",
+        "jewelry",
+        "jewelery",
+        "product",
+        "products",
+        "item",
+        "items",
+        "store",
+        "shop",
+        "buy",
+        "want",
+        "need",
+        "looking",
+        "show",
+        "find",
+    }
+    return {t for t in terms if t not in noise}
+
+
+def _chunk_grounded_in_query(chunk: str, focus_terms: set[str]) -> bool:
+    """True when the chunk mentions at least one real query term (not just domain)."""
+    if not focus_terms:
+        return True
+    c_lower = (chunk or "").lower()
+    title = chunk.splitlines()[0].lstrip("# ").strip().lower() if chunk.startswith("##") else ""
+    for t in focus_terms:
+        if len(t) <= 2:
+            continue
+        if re.search(rf"\b{re.escape(t)}\b", title) or re.search(rf"\b{re.escape(t)}\b", c_lower):
+            return True
+        if len(t) > 3 and t in re.sub(r"[^a-z0-9]+", "", title):
+            return True
+    return False
+
+
 async def search_kb(query: str) -> str:
     """Search the store knowledge base for product details, pricing, ingredients, or sizing.
 
@@ -456,8 +516,22 @@ async def search_kb(query: str) -> str:
         key=lambda x: x[0],
         reverse=True,
     )
-    # Require a real match — score 1 is often a weak token overlap
-    hits = [c for score, c in ranked if score >= 2][:5]
+    # Require a real match — score 1 is often a weak token overlap.
+    # Also drop domain-prior-only hits (e.g. every handicraft scoring ~11 for
+    # "quantum flux capacitor") so correlation / miss handling can run.
+    focus_terms = _query_focus_terms(q_intent, query)
+    hits = [
+        c
+        for score, c in ranked
+        if score >= 2 and _chunk_grounded_in_query(c, focus_terms)
+    ][:5]
+
+    store_id = None
+    try:
+        from stores.store_scope import get_current_store_id, resolve_store_id
+        store_id = get_current_store_id() or resolve_store_id()
+    except Exception:
+        store_id = None
 
     if not hits:
         titles = [c.splitlines()[0].lstrip("# ").strip() for c in chunks if c.startswith("##")]
@@ -470,7 +544,7 @@ async def search_kb(query: str) -> str:
                 from stores.store_scope import get_current_role, resolve_store_id, get_current_session_id
                 from stores.store_registry import add_store_query
             if (get_current_role() or "") == "buyer":
-                sid = resolve_store_id()
+                sid = resolve_store_id() or store_id
                 sess = get_current_session_id() or ""
                 if sid:
                     add_store_query(
@@ -481,6 +555,45 @@ async def search_kb(query: str) -> str:
                     )
         except Exception:
             pass
+
+        # Correlation fallback: related in-stock items when the exact ask is missing
+        related_block = ""
+        try:
+            try:
+                from catalog.boutique_catalog import format_tiles_block, parse_kb_products
+                from commerce.product_recommendations import enrich_as_tiles, related_for_miss
+            except ImportError:
+                from catalog.boutique_catalog import format_tiles_block, parse_kb_products
+                from commerce.product_recommendations import enrich_as_tiles, related_for_miss
+            catalog = parse_kb_products()
+            related = related_for_miss(
+                q_intent,
+                catalog,
+                store_id=store_id,
+                limit=3,
+            )
+            related_tiles = enrich_as_tiles(related)
+            if related_tiles:
+                related_block = (
+                    "\n\nCORRELATED ALTERNATIVES (exact item missing — show these):\n"
+                    "Tell the customer you noted their request for the owner, AND that "
+                    "these related items are available. Start the product line with "
+                    "'You can also look at…' then end with this exact TILES block:\n"
+                    + format_tiles_block(related_tiles)
+                )
+        except Exception:
+            related_block = ""
+
+        if related_block:
+            return (
+                f"{intent_header}\n\n"
+                "No strong KB match for that exact query. We do not currently stock that exact item. "
+                "You MUST call log_shop_request with the customer's requested item name "
+                "(and store_id from the SYSTEM NOTE) so the store owner can see it. "
+                "Then show the correlated alternatives below — do NOT invent other products.\n"
+                f"{related_block}"
+            )
+
         return (
             f"{intent_header}\n\n"
             "No strong KB match for that query. We do not currently stock this item. "
@@ -504,19 +617,44 @@ async def search_kb(query: str) -> str:
     try:
         try:
             from catalog.boutique_catalog import enrich_product, format_tiles_block, parse_kb_products
+            from commerce.product_recommendations import association_upsells, enrich_as_tiles
         except ImportError:
             from catalog.boutique_catalog import enrich_product, format_tiles_block, parse_kb_products
+            from commerce.product_recommendations import association_upsells, enrich_as_tiles
 
         hit_names = {
             h.splitlines()[0].lstrip("# ").strip().lower()
             for h in hits
             if h.startswith("##")
         }
-        tiles = []
-        for p in parse_kb_products():
+        catalog = parse_kb_products()
+        primary: list[dict] = []
+        for p in catalog:
             if p["name"].lower() in hit_names:
-                tile = enrich_product(p)
-                tiles.append(tile)
+                primary.append(enrich_product(p))
+
+        upsells = association_upsells(
+            primary,
+            catalog,
+            store_id=store_id,
+            limit=2,
+        )
+        upsell_tiles = enrich_as_tiles(upsells)
+
+        # Keep primary first; cap total cards so the UI stays scannable
+        tiles = primary[:4]
+        primary_skus = {
+            str(t.get("sku") or "").upper()
+            for t in tiles
+            if t.get("sku")
+        }
+        for t in upsell_tiles:
+            sku = str(t.get("sku") or "").upper()
+            if sku and sku in primary_skus:
+                continue
+            tiles.append(t)
+            if len(tiles) >= 5:
+                break
 
         if tiles:
             lines = ["", "PRODUCT MEDIA (use these exact img/url values in TILES):"]
@@ -524,6 +662,15 @@ async def search_kb(query: str) -> str:
                 lines.append(
                     f"- {t['name']} | sku={t['sku']} | img={t.get('img') or '(missing — run fetch_boutique_images.py)'} "
                     f"| link={t.get('url') or ''}"
+                )
+            if upsell_tiles:
+                names = ", ".join(str(t.get("name") or "") for t in upsell_tiles if t.get("name"))
+                lines.append("")
+                lines.append(
+                    "ASSOCIATION UPSELLS (bought/looked-with complementary items): "
+                    f"{names}. After the main picks, add one short sentence starting with "
+                    "'You can also look at…' covering these upsells. Include ALL tiles below "
+                    "in one TILES block (primary + upsells)."
                 )
             lines.append("")
             lines.append(

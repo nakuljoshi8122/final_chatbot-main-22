@@ -38,6 +38,11 @@ class StoreCreateIn(BaseModel):
     id: str | None = None
 
 
+class StoreDeleteIn(BaseModel):
+    """Confirm by typing the exact store name."""
+    confirm_name: str
+
+
 class UserQuery(BaseModel):
     query: str
     session_id: str = None
@@ -45,6 +50,7 @@ class UserQuery(BaseModel):
     store_id: str | None = None
     role: str | None = None
     image_base64: str | None = None
+    listing_context: dict | None = None
 
 
 class VoiceQuery(BaseModel):
@@ -55,3 +61,7 @@ class VoiceQuery(BaseModel):
 class ActiveProductBody(BaseModel):
     session_id: str
     product_id: str
+
+
+class SessionOnlyBody(BaseModel):
+    session_id: str

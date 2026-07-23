@@ -3,6 +3,8 @@ import { StyleSheet, View, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import ChatInterface from '@/features/legacy-store/components/ChatInterface';
 import { useStore } from '@/features/legacy-store/context/StoreContext';
+import { GlassScreen } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 
 export default function ChatScreen() {
   const router = useRouter();
@@ -16,16 +18,18 @@ export default function ChatScreen() {
 
   if (!ready || !store) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#111" />
-      </View>
+      <GlassScreen scheme="light">
+        <View style={styles.loading}>
+          <ActivityIndicator size="large" color={Glass.ink.light} />
+        </View>
+      </GlassScreen>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: '#F5F5F5' }]}>
+    <GlassScreen scheme="light" plain style={styles.container}>
       <ChatInterface key={store.id} />
-    </View>
+    </GlassScreen>
   );
 }
 
@@ -37,6 +41,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: 'transparent',
   },
 });

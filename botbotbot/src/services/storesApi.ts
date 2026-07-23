@@ -28,11 +28,19 @@ export type StoreQuery = {
 export async function fetchStores(category?: string): Promise<ShopStore[]> {
   try {
     const q = category ? `?category=${encodeURIComponent(category)}` : '';
-    const res = await fetchWithTimeout(`${API_BASE}/stores${q}`, undefined, 5000);
-    if (!res.ok) return [];
+    const res = await fetchWithTimeout(`${API_BASE}/stores${q}`, undefined, 8000);
+    if (!res.ok) {
+      console.warn(`[stores] ${API_BASE}/stores → HTTP ${res.status}`);
+      return [];
+    }
     const data = await res.json();
-    return Array.isArray(data.stores) ? data.stores : [];
-  } catch {
+    const list = Array.isArray(data.stores) ? data.stores : [];
+    if (!list.length) {
+      console.warn(`[stores] empty list from ${API_BASE}/stores`);
+    }
+    return list;
+  } catch (e) {
+    console.warn(`[stores] cannot reach ${API_BASE}/stores`, e);
     return [];
   }
 }
@@ -55,6 +63,41 @@ export async function createStore(payload: {
         body: JSON.stringify(payload),
       },
       8000,
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, error: data?.error || `HTTP ${res.status}` };
+    }
+    return data;
+  } catch (e) {
+    const aborted = e instanceof Error && e.name === 'AbortError';
+    return {
+      ok: false,
+      error: aborted
+        ? `Server timed out. Check API at ${API_BASE}`
+        : `Cannot reach ${API_BASE}. Is the backend running on this Wi‑Fi IP?`,
+    };
+  }
+}
+
+export async function deleteStore(
+  storeId: string,
+  confirmName: string,
+): Promise<{
+  ok: boolean;
+  error?: string;
+  products_deleted?: number;
+  name?: string;
+}> {
+  try {
+    const res = await fetchWithTimeout(
+      `${API_BASE}/stores/${encodeURIComponent(storeId)}`,
+      {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm_name: confirmName }),
+      },
+      15000,
     );
     const data = await res.json();
     if (!res.ok) {

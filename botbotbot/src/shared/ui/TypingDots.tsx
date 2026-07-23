@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { Glass } from '@/shared/theme/LiquidGlass';
 
 interface Props {
   color?: string;
@@ -7,7 +8,7 @@ interface Props {
 }
 
 /** Three dots that rise and fall one-by-one in a smooth periodic loop. */
-export default function TypingDots({ color = '#8A8A8A', size = 7 }: Props) {
+export default function TypingDots({ color = Glass.ink.lightSecondary, size = 7 }: Props) {
   const d0 = useRef(new Animated.Value(0)).current;
   const d1 = useRef(new Animated.Value(0)).current;
   const d2 = useRef(new Animated.Value(0)).current;

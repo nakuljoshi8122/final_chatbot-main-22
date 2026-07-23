@@ -25,6 +25,8 @@ import {
   setItemQuantity,
   setItemStatus,
 } from '@/services/inventoryStore';
+import { GlassPane, GlassPill, GlassScreen } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 
 const FILTERS: { key: InventoryStatus; label: string }[] = [
   { key: 'active', label: 'Active' },
@@ -151,13 +153,13 @@ export default function InventoryScreen() {
 
   const renderRow = ({ item }: { item: InventoryItem }) => (
     <TouchableOpacity
-      style={styles.row}
       onPress={() => {
         setSelected(item);
         setMoreOpen(false);
       }}
       activeOpacity={0.7}
     >
+      <GlassPane scheme="light" intensity="regular" noBlur flat style={styles.row} contentStyle={styles.rowContent}>
       {item.imageUri ? (
         <Image source={{ uri: item.imageUri }} style={styles.thumb} contentFit="cover" />
       ) : (
@@ -174,12 +176,14 @@ export default function InventoryScreen() {
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={18} color={SellerTheme.textSecondary} />
+      </GlassPane>
     </TouchableOpacity>
   );
 
   return (
+    <GlassScreen scheme="light">
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
+      <GlassPane scheme="light" intensity="regular" radius={0} flat contentStyle={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.headerBtn}>
           <Ionicons name="chevron-back" size={26} color={SellerTheme.text} />
         </TouchableOpacity>
@@ -198,7 +202,7 @@ export default function InventoryScreen() {
             <Ionicons name="search" size={22} color={SellerTheme.text} />
           </TouchableOpacity>
         </View>
-      </View>
+      </GlassPane>
 
       {searchOpen && (
         <View style={styles.searchWrap}>
@@ -219,10 +223,11 @@ export default function InventoryScreen() {
           return (
             <TouchableOpacity
               key={chip.key}
-              style={[styles.chip, active && styles.chipActive]}
               onPress={() => setFilter(chip.key)}
             >
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{chip.label}</Text>
+              <GlassPill scheme="light" active={active} style={styles.chip}>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{chip.label}</Text>
+              </GlassPill>
             </TouchableOpacity>
           );
         })}
@@ -258,7 +263,7 @@ export default function InventoryScreen() {
             setSelected(null);
           }}
         />
-        <View style={styles.sheet}>
+        <GlassPane scheme="light" intensity="strong" radius={Glass.radius.lg} style={styles.sheet} contentStyle={styles.sheetContent}>
           <View style={styles.sheetHeader}>
             <View style={{ flex: 1 }} />
             <TouchableOpacity
@@ -376,16 +381,17 @@ export default function InventoryScreen() {
               </View>
             </>
           )}
-        </View>
+        </GlassPane>
       </Modal>
     </SafeAreaView>
+    </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: SellerTheme.bg,
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',
@@ -422,8 +428,10 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   searchInput: {
-    backgroundColor: SellerTheme.surface,
-    borderRadius: SellerTheme.radiusSm,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: Glass.radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: SellerTheme.border,
     paddingHorizontal: 14,
     paddingVertical: 10,
     color: SellerTheme.text,
@@ -438,11 +446,6 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: SellerTheme.chipIdle,
-  },
-  chipActive: {
-    backgroundColor: SellerTheme.chipActive,
   },
   chipText: {
     color: SellerTheme.textSecondary,
@@ -457,11 +460,14 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   row: {
+    marginBottom: 8,
+    borderRadius: Glass.radius.md,
+  },
+  rowContent: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: SellerTheme.radiusSm,
+    paddingHorizontal: 12,
   },
   thumb: {
     width: 48,
@@ -499,12 +505,15 @@ const styles = StyleSheet.create({
     backgroundColor: SellerTheme.overlay,
   },
   sheet: {
-    backgroundColor: SellerTheme.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: Glass.radius.lg,
+    borderTopRightRadius: Glass.radius.lg,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    maxHeight: '72%',
+  },
+  sheetContent: {
     paddingHorizontal: 20,
     paddingBottom: 28,
-    maxHeight: '72%',
   },
   sheetHeader: {
     flexDirection: 'row',

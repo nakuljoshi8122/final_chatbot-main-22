@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
+import { Glass } from '@/shared/theme/LiquidGlass';
 import { usePeriodicBounce } from '@/shared/hooks/usePeriodicBounce';
 import {
   type BuyerAlert,
@@ -82,7 +84,11 @@ export default function BuyerNotifyFab({
           activeOpacity={0.85}
           accessibilityLabel="Open shop updates"
         >
-          <Ionicons name="notifications-outline" size={22} color="#fff" />
+          <View style={styles.fabGlass}>
+            <BlurView intensity={Glass.blur.regular} tint="light" style={StyleSheet.absoluteFill} />
+            <View pointerEvents="none" style={styles.fabTint} />
+            <Ionicons name="notifications-outline" size={22} color="#fff" />
+          </View>
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{alerts.length}</Text>
           </View>
@@ -92,9 +98,11 @@ export default function BuyerNotifyFab({
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
           <Pressable style={styles.dialog} onPress={(e) => e.stopPropagation()}>
+            <BlurView intensity={Glass.blur.strong} tint="light" style={StyleSheet.absoluteFill} />
+            <View pointerEvents="none" style={styles.dialogFill} />
             <View style={styles.dialogHeader}>
               <View style={styles.dialogTitleRow}>
-                <Ionicons name="notifications-outline" size={18} color="#1D3557" />
+                <Ionicons name="notifications-outline" size={18} color={Glass.tint.blue} />
                 <Text style={styles.dialogTitle}>For you</Text>
               </View>
               <TouchableOpacity
@@ -103,7 +111,7 @@ export default function BuyerNotifyFab({
                 style={styles.closeBtn}
                 accessibilityLabel="Close updates"
               >
-                <Ionicons name="close" size={22} color="#555" />
+                <Ionicons name="close" size={22} color={Glass.ink.lightSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -127,13 +135,13 @@ export default function BuyerNotifyFab({
                   activeOpacity={0.65}
                 >
                   <View style={styles.alertIcon}>
-                    <Ionicons name={ICON[a.type]} size={18} color="#1D3557" />
+                    <Ionicons name={ICON[a.type]} size={18} color={Glass.tint.blue} />
                   </View>
                   <View style={styles.alertText}>
                     <Text style={styles.alertTitle}>{a.title}</Text>
                     <Text style={styles.alertMessage}>{a.message}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={14} color="#C2CBD6" />
+                  <Ionicons name="chevron-forward" size={14} color={Glass.ink.lightTertiary} />
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -154,18 +162,29 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#111',
-    alignItems: 'center',
-    justifyContent: 'center',
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.22,
-        shadowRadius: 6,
+        shadowColor: Glass.tint.blue,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.38,
+        shadowRadius: 12,
       },
       android: { elevation: 6 },
     }),
+  },
+  fabGlass: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: Glass.stroke.light,
+  },
+  fabTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(61,123,255,0.78)',
   },
   badge: {
     position: 'absolute',
@@ -174,17 +193,17 @@ const styles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#E63946',
+    backgroundColor: Glass.tint.red,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
     borderWidth: 2,
-    borderColor: '#F5F5F5',
+    borderColor: 'rgba(255,255,255,0.9)',
   },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(20,24,40,0.45)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -193,18 +212,24 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 360,
     maxHeight: '72%',
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: 'transparent',
+    borderRadius: Glass.radius.lg,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: Glass.stroke.light,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: '#1B2559',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.15,
         shadowRadius: 24,
       },
       android: { elevation: 12 },
     }),
+  },
+  dialogFill: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Glass.fill.lightStrong,
   },
   dialogHeader: {
     flexDirection: 'row',
@@ -213,31 +238,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
+    borderBottomColor: Glass.stroke.lightOuter,
   },
   dialogTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dialogTitle: { fontSize: 16, fontWeight: '800', color: '#111' },
+  dialogTitle: { fontSize: 16, fontWeight: '800', color: Glass.ink.light },
   closeBtn: { padding: 4 },
   dialogScroll: { flexGrow: 0 },
   dialogBody: { padding: 16, gap: 10, paddingBottom: 20 },
-  intro: { fontSize: 13, color: '#8A929C', marginBottom: 4 },
+  intro: { fontSize: 13, color: Glass.ink.lightTertiary, marginBottom: 4 },
   alertRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: 'rgba(120,130,160,0.14)',
   },
   alertIcon: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#EAF0F7',
+    backgroundColor: 'rgba(61,123,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   alertText: { flex: 1, gap: 2 },
-  alertTitle: { fontSize: 14, fontWeight: '800', color: '#111' },
-  alertMessage: { fontSize: 13, color: '#555', lineHeight: 18 },
+  alertTitle: { fontSize: 14, fontWeight: '800', color: Glass.ink.light },
+  alertMessage: { fontSize: 13, color: Glass.ink.lightSecondary, lineHeight: 18 },
 });

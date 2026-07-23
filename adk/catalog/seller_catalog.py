@@ -206,6 +206,129 @@ def _boutique_seed_rows_for_store(store_id: str) -> list[dict[str, Any]]:
     return rows
 
 
+def scoped_seed_sku(seed_sku: str, store_id: str) -> str:
+    """Unique SKU per store so default catalog copies are owned, not shared."""
+    base = str(seed_sku or "").strip().upper()
+    sid = str(store_id or "").strip()
+    if not base or not sid:
+        return base
+    suffix = sid.replace("store_", "")
+    marker = f"--{suffix}".upper()
+    if base.endswith(marker):
+        return base
+    if "--" in base:
+        return base
+    return f"{base}--{suffix}".upper()
+
+
+def seed_sku_from_scoped(sku: str) -> str:
+    """Strip store suffix to recover original seed SKU for image lookup."""
+    key = str(sku or "").strip().upper()
+    if "--" in key:
+        return key.split("--", 1)[0]
+    return key
+
+
+def clone_default_catalog_for_store(store_id: str) -> dict[str, Any]:
+    """Duplicate category seed products into this store with unique SKUs + ownership.
+
+    Shared seed SKUs must never be claimed by one shop — each store gets its own rows.
+    Image URLs may still point at the shared seed image file (read-only asset).
+    """
+    sid = str(store_id or "").strip()
+    if not sid:
+        return {"ok": False, "cloned": 0, "error": "store_id required"}
+
+    seeds = _boutique_seed_rows_for_store(sid)
+    if not seeds:
+        return {"ok": True, "cloned": 0, "skipped": 0}
+
+    data = _load()
+    cloned = 0
+    skipped = 0
+    now = datetime.now(timezone.utc).isoformat()
+
+    for seed in seeds:
+        orig = str(seed.get("sku") or "").strip().upper()
+        if not orig:
+            continue
+        seed_key = seed_sku_from_scoped(orig)
+        new_sku = scoped_seed_sku(seed_key, sid)
+        existing = data.get(new_sku)
+        if existing and str(existing.get("store_id") or "").strip() == sid:
+            skipped += 1
+            continue
+        if existing and str(existing.get("store_id") or "").strip() not in ("", sid):
+            skipped += 1
+            continue
+
+        img = str(seed.get("img") or "").strip()
+        url = str(seed.get("url") or img or "").strip()
+        seed_img, seed_url = boutique_image_for_sku(seed_key)
+        if seed_img:
+            img = seed_img
+        if seed_url:
+            url = seed_url
+        if not img:
+            img = url
+
+        data[new_sku] = {
+            "sku": new_sku,
+            "name": str(seed.get("name") or new_sku),
+            "category": str(seed.get("category") or "Handicrafts"),
+            "price": str(seed.get("price") or ""),
+            "description": str(seed.get("description") or ""),
+            "category_notes": str(seed.get("category_notes") or ""),
+            "quantity": int(seed.get("quantity") or 10),
+            "status": "active",
+            "img": img,
+            "images": [img] if img else [],
+            "url": url or img,
+            "source": "seed_clone",
+            "seed_sku": seed_key,
+            "store_id": sid,
+            "tags": list(seed.get("tags") or []),
+            "created_at": now,
+            "updated_at": now,
+        }
+        cloned += 1
+
+    if cloned:
+        _save(data)
+    return {"ok": True, "cloned": cloned, "skipped": skipped, "store_id": sid}
+
+
+def ensure_store_catalog(store_id: str) -> dict[str, Any]:
+    """Idempotent: clone default catalog for a store if not yet fully owned."""
+    return clone_default_catalog_for_store(store_id)
+
+
+def resolve_store_product(sku: str, store_id: str) -> Optional[dict[str, Any]]:
+    """Resolve a SKU to the row owned by this store (clone seed if needed)."""
+    key = str(sku or "").strip().upper()
+    sid = str(store_id or "").strip()
+    if not key:
+        return None
+
+    data = _load()
+    row = data.get(key)
+    if row and (not sid or str(row.get("store_id") or "").strip() in ("", sid)):
+        return dict(row)
+
+    if sid:
+        scoped = scoped_seed_sku(seed_sku_from_scoped(key), sid)
+        row = data.get(scoped)
+        if row and str(row.get("store_id") or "").strip() == sid:
+            return dict(row)
+        ensure_store_catalog(sid)
+        data = _load()
+        row = data.get(scoped)
+        if row and str(row.get("store_id") or "").strip() == sid:
+            return dict(row)
+
+    return None
+
+
 def list_seller_products(
     active_only: bool = False,
     store_id: Optional[str] = None,
@@ -213,23 +336,13 @@ def list_seller_products(
     rows = list(_load().values())
     if store_id:
         sid = str(store_id).strip()
-        seller_rows = [r for r in rows if str(r.get("store_id") or "").strip() == sid]
-        # Merge Pinterest/KB seed items for this shop's category
-        by_sku = {
-            str(r.get("sku") or "").strip().upper(): dict(r)
-            for r in seller_rows
-            if r.get("sku")
-        }
-        for seed in _boutique_seed_rows_for_store(sid):
-            key = str(seed.get("sku") or "").strip().upper()
-            if not key:
-                continue
-            if key in by_sku:
-                # Seller override (e.g. status→draft) must keep seed photos
-                by_sku[key] = _with_image_fallback(by_sku[key], seed)
-                continue
-            by_sku[key] = seed
-        rows = [_with_image_fallback(r) for r in by_sku.values()]
+        # Each shop owns its own copies of the default category catalog
+        ensure_store_catalog(sid)
+        rows = [
+            r
+            for r in _load().values()
+            if str(r.get("store_id") or "").strip() == sid
+        ]
 
     out: list[dict[str, Any]] = []
     for r in rows:
@@ -736,21 +849,92 @@ def delete_seller_product(sku: str) -> bool:
 
 
 def soft_delete_seller_product(sku: str, store_id: str = "") -> Optional[dict[str, Any]]:
-    """Move a listing to trash (keep row + image). Seeds hydrate if needed."""
+    """Move a listing to trash (keep row + image). Clones seed into this store if needed."""
     key = str(sku or "").strip().upper()
     if not key:
         return None
-    row = get_seller_product(key) or seed_product_as_seller_row(key, store_id)
+    sid = str(store_id or "").strip()
+    row = resolve_store_product(key, sid) if sid else (
+        get_seller_product(key) or seed_product_as_seller_row(key, store_id)
+    )
     if not row:
+        # Visibility-only fallback for unknown SKUs
         set_sku_inventory_status(key, "trash")
         return {"sku": key, "status": "trash", "source": "visibility"}
+    # Never rewrite another store's shared SKU — operate on this store's owned row
+    owned_sku = str(row.get("sku") or key).strip().upper()
+    if sid and str(row.get("store_id") or "").strip() not in ("", sid):
+        # Force a store-scoped clone and trash that
+        ensure_store_catalog(sid)
+        scoped = scoped_seed_sku(seed_sku_from_scoped(key), sid)
+        row = get_seller_product(scoped)
+        if not row:
+            return None
+        owned_sku = scoped
     payload = dict(row)
-    if store_id:
-        payload["store_id"] = str(store_id).strip()
+    if sid:
+        payload["store_id"] = sid
+    payload["sku"] = owned_sku
     payload["status"] = "trash"
     updated = upsert_seller_product(payload, tag=False)
-    set_sku_inventory_status(key, "trash", name=str(updated.get("name") or ""))
+    set_sku_inventory_status(owned_sku, "trash", name=str(updated.get("name") or ""))
     return updated
+
+
+def _delete_local_product_images(sku: str) -> int:
+    """Remove on-disk images for this SKU only (not shared seed originals)."""
+    key = str(sku or "").strip().upper()
+    if not key:
+        return 0
+    deleted = 0
+    PRODUCT_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    for path in list(PRODUCT_IMAGES_DIR.glob(f"{key}.*")) + list(
+        PRODUCT_IMAGES_DIR.glob(f"{key}_*.*")
+    ):
+        # Never delete unscoped seed assets (AP-TOTE-CV.jpg) when deleting a clone
+        # unless the SKU itself is the unscoped name and owned by the store.
+        try:
+            path.unlink()
+            deleted += 1
+        except OSError:
+            pass
+    return deleted
+
+
+def purge_products_for_store(store_id: str) -> dict[str, Any]:
+    """Permanently delete every product row owned by this store. Other shops untouched."""
+    sid = str(store_id or "").strip()
+    if not sid:
+        return {"ok": False, "deleted": 0, "error": "store_id required"}
+
+    data = _load()
+    vis = _load_visibility()
+    removed_skus: list[str] = []
+    images_deleted = 0
+
+    for sku, row in list(data.items()):
+        if str(row.get("store_id") or "").strip() != sid:
+            continue
+        key = str(sku or row.get("sku") or "").strip().upper()
+        if not key:
+            continue
+        del data[key]
+        removed_skus.append(key)
+        vis.pop(key, None)
+        # Only delete image files that belong to this SKU key (scoped clones / seller uploads)
+        images_deleted += _delete_local_product_images(key)
+
+    if removed_skus:
+        _save(data)
+        _save_visibility(vis)
+
+    return {
+        "ok": True,
+        "deleted": len(removed_skus),
+        "skus": removed_skus,
+        "images_deleted": images_deleted,
+        "store_id": sid,
+    }
 
 
 def purge_seller_product(sku: str) -> dict[str, Any]:

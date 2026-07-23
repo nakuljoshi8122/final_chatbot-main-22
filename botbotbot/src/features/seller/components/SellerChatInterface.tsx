@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -35,6 +35,7 @@ import TypingDots from '@/shared/ui/TypingDots';
 import {
   LastListedProduct,
   loadLastListed,
+  loadFormDraft,
   loadDoneToday,
   saveDoneToday,
   loadTopMovers,
@@ -47,9 +48,15 @@ import { patchSellerProduct } from '@/services/patchSellerProduct';
 import UndoToast from '@/shared/ui/UndoToast';
 import SellerAiBriefFab from '@/features/seller/components/SellerAiBriefFab';
 import { fetchStoreProducts, fetchStoreQueries } from '@/services/storesApi';
-import { fetchAiMorningBrief } from '@/services/sellerAiApi';
+import { fetchAiMorningBrief, fetchAiChatSuggestions } from '@/services/sellerAiApi';
 import { tapHaptic, successHaptic } from '@/shared/utils/sellerHaptics';
 import { useRouter } from 'expo-router';
+import { GlassPane } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
+import { SellerTheme } from '@/shared/theme/SellerTheme';
+import SellerNextSuggestion, {
+  ChatSuggestion,
+} from '@/features/seller/components/SellerNextSuggestion';
 
 type Props = {
   storeId: string;
@@ -73,6 +80,16 @@ type SellerMsg = {
   formPrefill?: Partial<LastListedProduct>;
   formQueue?: { uri: string; base64?: string }[];
   formKey?: string;
+  formDraftSku?: string;
+  /** Agent-applied draft fields for this form instance. */
+  chatFormSync?: {
+    name?: string;
+    price?: string;
+    quantity?: string;
+    category?: string;
+    description?: string;
+    sku?: string;
+  };
   /** Bot prompt after photo upload: list vs agent query. */
   photoChoice?: boolean;
   photoChoiceResolved?: boolean;
@@ -87,39 +104,30 @@ type QuickAction = {
   openAddForm?: boolean;
 };
 
-const QUICK_ACTIONS: QuickAction[] = [
-  { label: 'My items', message: 'Show my items', icon: 'grid-outline' },
-  { label: 'Drafts', message: 'Show my draft items', icon: 'document-outline' },
+const DAY_START_FALLBACK: ChatSuggestion[] = [
   {
-    label: 'Add',
-    message: 'I wanna add a product',
-    icon: 'add-circle-outline',
-    openAddForm: true,
+    label: 'Morning priorities',
+    message: 'What should I focus on first today for my store?',
   },
   {
-    label: 'Snap',
-    message: '__SNAP__',
-    icon: 'camera-outline',
-    openAddForm: true,
-  },
-  { label: 'Low stock', message: 'Which items are low on stock?', icon: 'alert-circle-outline' },
-  {
-    label: 'Similar',
-    message: '__SIMILAR__',
-    icon: 'copy-outline',
-    openAddForm: true,
+    label: 'Check low stock',
+    message: 'Which items are low on stock?',
   },
   {
-    label: 'Publish drafts',
-    message: 'Publish all my draft items to active',
-    icon: 'checkmark-done-outline',
+    label: 'Review drafts',
+    message: 'Show my draft items so I can publish them.',
   },
-  { label: 'Restock AI', message: 'What should I restock first?', icon: 'trending-up-outline' },
-  { label: 'Top sellers', message: 'What sold best in my store?', icon: 'stats-chart-outline' },
-  { label: 'Buyer themes', message: 'Summarize buyer question themes', icon: 'people-outline' },
+  {
+    label: 'Add a product',
+    message: 'I want to add a new product — walk me through it.',
+  },
+  {
+    label: 'Top sellers',
+    message: 'What sold best in my store recently?',
+  },
 ];
 
-/** ChatGPT-style starter tiles — short labels, zero essay. */
+/** ChatGPT-style starter tiles — keep to three jobs. */
 const STARTER_SUGGESTIONS: QuickAction[] = [
   {
     label: 'Add a product',
@@ -133,13 +141,11 @@ const STARTER_SUGGESTIONS: QuickAction[] = [
     icon: 'camera-outline',
     openAddForm: true,
   },
-  { label: 'Show my items', message: 'Show my items', icon: 'grid-outline' },
   {
     label: 'Low stock',
     message: 'Which items are low on stock?',
     icon: 'alert-circle-outline',
   },
-  { label: 'Open drafts', message: 'Show my draft items', icon: 'document-outline' },
 ];
 
 /** Survive tab switches without losing the thread. */
@@ -186,6 +192,54 @@ async function loadLocal(storeId: string): Promise<{
     // ignore
   }
   return null;
+}
+
+type ListingFormSync = {
+  name?: string;
+  price?: string;
+  quantity?: string;
+  category?: string;
+  description?: string;
+  sku?: string;
+};
+
+/** Keep one listing form pinned below the latest chat turn with synced fields. */
+function pinListingFormToBottom(messages: SellerMsg[], sync: ListingFormSync): SellerMsg[] {
+  const next = [...messages];
+  const idx = next.findIndex((m) => !m.isUser && m.addProductForm && !m.addProductSummary);
+  const prefill: Partial<LastListedProduct> = {
+    name: sync.name,
+    price: sync.price,
+    quantity: sync.quantity != null ? Number(sync.quantity) : undefined,
+    category: sync.category,
+    description: sync.description,
+  };
+  const formSync: ListingFormSync = { ...sync };
+  let formMsg: SellerMsg;
+  if (idx >= 0) {
+    formMsg = {
+      ...next[idx],
+      text: 'Draft updated — tweak here or in chat, then tap List product.',
+      addProductForm: true,
+      chatFormSync: formSync,
+      formPrefill: prefill,
+      formDraftSku: sync.sku,
+      formKey: `form-${Date.now()}`,
+    };
+    next.splice(idx, 1);
+  } else {
+    formMsg = {
+      id: `form-${Date.now()}`,
+      text: 'Finish listing — tweak here or in chat, then tap List product.',
+      isUser: false,
+      timestamp: new Date().toISOString(),
+      addProductForm: true,
+      chatFormSync: formSync,
+      formPrefill: prefill,
+      formDraftSku: sync.sku,
+    };
+  }
+  return [...next, formMsg];
 }
 
 /** Wraps a chat row so it fades + slides up into place on mount (matches tile motion). */
@@ -247,6 +301,35 @@ export default function SellerChatInterface({
   const [doneToday, setDoneToday] = useState<DoneToday>({});
   const [movers, setMovers] = useState<{ name: string; count: number }[]>([]);
   const [smartStarters, setSmartStarters] = useState(STARTER_SUGGESTIONS);
+  const [nextSuggestions, setNextSuggestions] =
+    useState<ChatSuggestion[]>(DAY_START_FALLBACK);
+  const listingDraftRef = useRef<{
+    in_progress?: boolean;
+    name?: string;
+    price?: string;
+    quantity?: string;
+    category?: string;
+    description?: string;
+    hasPhoto?: boolean;
+    source?: string;
+    sku?: string;
+  }>({});
+  const handleListingDraftChange = useCallback(
+    (draft: {
+      in_progress: boolean;
+      name?: string;
+      price?: string;
+      quantity?: string;
+      category?: string;
+      description?: string;
+      hasPhoto?: boolean;
+      source?: string;
+      sku?: string;
+    }) => {
+      listingDraftRef.current = draft;
+    },
+    [],
+  );
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
   const tileAnims = useRef(STARTER_SUGGESTIONS.map(() => new Animated.Value(1))).current;
@@ -620,7 +703,7 @@ export default function SellerChatInterface({
           }
         }
 
-        // Smart starters: put the urgent job first
+        // Smart starters: urgent job first, max 3
         const base = [...STARTER_SUGGESTIONS];
         if (low > 0 && !done.lowStock) {
           const idx = base.findIndex((s) => s.message.includes('low on stock'));
@@ -629,13 +712,13 @@ export default function SellerChatInterface({
             base.unshift({ ...item, label: 'Restock low' });
           }
         } else if (drafts > 0 && !done.drafts) {
-          const idx = base.findIndex((s) => s.message.includes('draft'));
-          if (idx > 0) {
-            const [item] = base.splice(idx, 1);
-            base.unshift({ ...item, label: 'Publish drafts' });
-          }
+          base[2] = {
+            label: 'Publish drafts',
+            message: 'Show my draft items',
+            icon: 'document-outline',
+          };
         }
-        setSmartStarters(base);
+        setSmartStarters(base.slice(0, 3));
       } catch {
         // Keep seller chat usable if brief/stats loading fails.
       }
@@ -644,6 +727,32 @@ export default function SellerChatInterface({
       cancelled = true;
     };
   }, [sessionReady, storeId, messages.length]);
+
+  // Predicted next actions for the rotating chip under chat.
+  useEffect(() => {
+    if (!sessionReady || isLoading) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        const chatMsgs = messages
+          .filter((m) => !m.addProductForm && !m.photoChoice && (m.text || '').trim())
+          .map((m) => ({ text: m.text, isUser: m.isUser }));
+        const res = await fetchAiChatSuggestions(storeId, chatMsgs);
+        if (cancelled) return;
+        const rows = (res?.suggestions || []).filter(
+          (s) => s?.label && s?.message,
+        ) as ChatSuggestion[];
+        if (rows.length) setNextSuggestions(rows);
+        else if (!chatMsgs.length) setNextSuggestions(DAY_START_FALLBACK);
+      })();
+    }, 450);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // Refetch after turns settle — not on every mid-turn patch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionReady, storeId, isLoading, messages.length, messages[messages.length - 1]?.id]);
 
   const send = async (overrideText?: string) => {
     const text = (overrideText ?? inputText).trim();
@@ -708,20 +817,62 @@ export default function SellerChatInterface({
     setPhotoUserMsgId(null);
     setIsLoading(true);
 
+    const hasOpenForm = messages.some((m) => m.addProductForm && !m.addProductSummary);
+    let listingContext = listingDraftRef.current?.in_progress
+      ? { ...listingDraftRef.current, sku: listingDraftRef.current.sku }
+      : undefined;
+    if (!listingContext && hasOpenForm) {
+      const draft = await loadFormDraft(storeId);
+      if (draft && (draft.name || draft.price || draft.photoUri)) {
+        listingContext = {
+          in_progress: true,
+          name: draft.name,
+          price: draft.price,
+          quantity: draft.quantity,
+          category: draft.category,
+          description: draft.description,
+          hasPhoto: !!draft.photoUri,
+          source: 'form',
+        };
+      } else if (hasOpenForm) {
+        listingContext = { in_progress: true, source: 'form' };
+      }
+    }
+
     try {
       const response = await apiService.sendMessage(display, sessionId, {
         store: categoryTag(category),
         storeId,
         role: 'seller',
         imageBase64: imageB64,
+        listingContext,
       });
       const nextSession = response.session_id || sessionId;
       if (response.session_id) {
         setSessionId(response.session_id);
         await saveStoredSessionId(response.session_id, sessionKey);
       }
+      if (response.listing_meta) {
+        listingDraftRef.current = {
+          ...listingDraftRef.current,
+          ...response.listing_meta,
+          in_progress: response.listing_meta.in_progress !== false,
+        };
+      } else if (response.tiles?.length && !listingDraftRef.current?.in_progress) {
+        listingDraftRef.current = {};
+      }
+      const formSync = response.listing_meta
+        ? {
+            name: response.listing_meta.name,
+            price: response.listing_meta.price,
+            quantity: response.listing_meta.quantity,
+            category: response.listing_meta.category,
+            description: response.listing_meta.description,
+            sku: response.listing_meta.sku,
+          }
+        : undefined;
       setMessages((prev) => {
-        const next = [
+        let next: SellerMsg[] = [
           ...prev,
           {
             id: (Date.now() + 1).toString(),
@@ -731,9 +882,15 @@ export default function SellerChatInterface({
             tiles: response.tiles?.length ? response.tiles : undefined,
           },
         ];
+        if (formSync && (formSync.name || formSync.price || formSync.quantity || formSync.sku)) {
+          next = pinListingFormToBottom(next, formSync);
+        }
         void persistLocal(storeId, nextSession, next);
         return next;
       });
+      if (formSync) {
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+      }
     } catch (e) {
       setMessages((prev) => [
         ...prev,
@@ -794,27 +951,61 @@ export default function SellerChatInterface({
     }
     setPendingImage(null);
     setPhotoUserMsgId(null);
+    setNextSuggestions(DAY_START_FALLBACK);
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity
-          style={styles.newChatBtn}
-          onPress={newChat}
-          hitSlop={8}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="create-outline" size={16} color="#1D3557" />
-          <Text style={styles.newChatText}>New chat</Text>
-        </TouchableOpacity>
+        <Text style={styles.assistHint}>Ask or automate — stock stays on Stock</Text>
+        <View style={styles.topBarActions}>
+          {sessionReady ? (
+            <SellerAiBriefFab
+              mode="header"
+              storeId={storeId}
+              stats={{
+                lowStock: brief.lowStock,
+                drafts: brief.drafts,
+                queries: brief.queries,
+                movers,
+              }}
+              narrative={aiNarrative}
+              priorities={aiPriorities}
+              done={doneToday}
+              onLowStock={() => {
+                void bumpStarterStat(storeId, 'Low stock');
+                void send('Which items are low on stock?');
+              }}
+              onDrafts={() => {
+                void bumpStarterStat(storeId, 'Drafts');
+                void send('Show my draft items');
+              }}
+              onQueries={() => router.push(`/seller/${storeId}/queries` as never)}
+              onDoneToday={async () => {
+                const next = { lowStock: true, drafts: true, queries: true };
+                setDoneToday(next);
+                await saveDoneToday(storeId, next);
+                successHaptic();
+                setToast({ message: 'Marked done for today ✓' });
+              }}
+            />
+          ) : null}
+          <TouchableOpacity
+            style={styles.iconGhost}
+            onPress={newChat}
+            hitSlop={8}
+            accessibilityLabel="New chat"
+          >
+            <Ionicons name="create-outline" size={18} color={SellerTheme.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {sessionReady && messages.length === 0 ? (
         <View style={styles.emptyBody}>
           <View style={styles.starterHeader}>
-            <Text style={styles.starterTitle}>What do you need?</Text>
-            <Text style={styles.starterSub}>One tap. No essays.</Text>
+            <Text style={styles.starterTitle}>Quick jobs</Text>
+            <Text style={styles.starterSub}>Or type below — one job at a time.</Text>
           </View>
           <View style={styles.starterList}>
             {smartStarters.map((s, i) => (
@@ -843,10 +1034,10 @@ export default function SellerChatInterface({
                   activeOpacity={0.7}
                 >
                   <View style={styles.starterIcon}>
-                    <Ionicons name={s.icon} size={16} color="#1D3557" />
+                    <Ionicons name={s.icon} size={16} color={Glass.tint.blue} />
                   </View>
                   <Text style={styles.starterText}>{s.label}</Text>
-                  <Ionicons name="arrow-forward" size={15} color="#C2CBD6" />
+                  <Ionicons name="arrow-forward" size={15} color={SellerTheme.textSecondary} />
                 </TouchableOpacity>
               </Animated.View>
             ))}
@@ -876,7 +1067,7 @@ export default function SellerChatInterface({
                       disabled={isLoading}
                       activeOpacity={0.7}
                     >
-                      <Ionicons name="chatbubble-ellipses-outline" size={16} color="#1D3557" />
+                      <Ionicons name="chatbubble-ellipses-outline" size={16} color={SellerTheme.text} />
                       <Text style={styles.photoChoiceBtnText}>Query</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -918,29 +1109,49 @@ export default function SellerChatInterface({
                   onTilePressOverride={(t) => {
                     tapHaptic();
                     void bumpMover(storeId, String(t.sku || t.id), t.name);
+                    const isPick =
+                      t.pick === true ||
+                      String(t.tag || '').toUpperCase() === 'TAP TO PICK' ||
+                      m.tiles!.some(
+                        (x) =>
+                          x.pick === true ||
+                          String(x.tag || '').toUpperCase() === 'TAP TO PICK',
+                      );
+                    if (isPick) {
+                      const sku = String(t.sku || t.id || '').trim();
+                      void send(
+                        `Use SKU ${sku} (${t.name}) — apply my last change to this item only.`,
+                      );
+                      return;
+                    }
                     setSelectedTile(t);
                   }}
                 />
-                <View style={styles.bulkRow}>
-                  {m.tiles.some((t) => (t.quantity ?? 99) < 3) ? (
-                    <TouchableOpacity
-                      style={styles.bulkChip}
-                      onPress={() => void bulkRestock(m.tiles!, 5)}
-                    >
-                      <Text style={styles.bulkChipText}>Restock all +5</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                  {m.tiles.some(
-                    (t) => String(t.status || '').toLowerCase() === 'draft',
-                  ) ? (
-                    <TouchableOpacity
-                      style={styles.bulkChip}
-                      onPress={() => void bulkPublish(m.tiles!)}
-                    >
-                      <Text style={styles.bulkChipText}>Publish all</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
+                {!m.tiles.some(
+                  (t) =>
+                    t.pick === true || String(t.tag || '').toUpperCase() === 'TAP TO PICK',
+                ) ? (
+                  <View style={styles.bulkRow}>
+                    {m.tiles.some((t) => (t.quantity ?? 99) < 3) ? (
+                      <TouchableOpacity
+                        style={styles.bulkChip}
+                        onPress={() => void bulkRestock(m.tiles!, 5)}
+                      >
+                        <Text style={styles.bulkChipText}>Restock all +5</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    {m.tiles.some(
+                      (t) => String(t.status || '').toLowerCase() === 'draft',
+                    ) ? (
+                      <TouchableOpacity
+                        style={styles.bulkChip}
+                        onPress={() => void bulkPublish(m.tiles!)}
+                      >
+                        <Text style={styles.bulkChipText}>Publish all</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ) : null}
               </View>
             ) : null}
             {!m.isUser && m.addProductForm ? (
@@ -951,8 +1162,13 @@ export default function SellerChatInterface({
                 initialPhoto={m.formPhoto || null}
                 prefills={m.formPrefill || null}
                 initialQueue={m.formQueue || []}
+                onDraftChange={handleListingDraftChange}
+                chatSync={m.chatFormSync || null}
+                initialDraftSku={m.formDraftSku || ''}
                 onListed={async (item, summary, meta) => {
                   successHaptic();
+                  listingDraftRef.current = {};
+                  await apiService.clearListingDraft(sessionId);
                   await appendChangeLog(storeId, `Listed ${summary.name}`, summary.sku);
                   if (meta?.continueBatch && meta.nextPhoto) {
                     setMessages((prev) => {
@@ -1056,49 +1272,37 @@ export default function SellerChatInterface({
               setPhotoUserMsgId(null);
             }}
           >
-            <Ionicons name="close-circle" size={22} color="#c00" />
+            <Ionicons name="close-circle" size={22} color={Glass.tint.red} />
           </TouchableOpacity>
         </View>
       ) : null}
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.quickRow}
-        contentContainerStyle={styles.quickContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {QUICK_ACTIONS.map((qa) => (
-          <TouchableOpacity
-            key={qa.label}
-            style={styles.quickChip}
-            onPress={() => {
-              if (qa.message === '__SNAP__') void pickImage(true, { directList: true });
-              else if (qa.message === '__SIMILAR__') void openSimilar();
-              else if (qa.openAddForm) openAddProductForm(qa.message);
-              else void send(qa.message);
-            }}
-            disabled={isLoading || !sessionReady}
-          >
-            <Ionicons name={qa.icon} size={14} color="#1D3557" />
-            <Text style={styles.quickChipText}>{qa.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <SellerNextSuggestion
+        suggestions={nextSuggestions}
+        disabled={isLoading || !sessionReady}
+        onSelect={(s) => {
+          tapHaptic();
+          void send(s.message);
+        }}
+      />
 
-      <View
+      <GlassPane
+        scheme="light"
+        intensity="regular"
+        radius={Glass.radius.xl}
         style={[
-          styles.inputRow,
+          styles.inputPane,
           {
             paddingBottom: keyboardHeight > 0 ? 8 : Math.max(insets.bottom, 8),
           },
         ]}
+        contentStyle={styles.inputRow}
       >
         <TouchableOpacity style={styles.iconBtn} onPress={() => void pickImage(true)}>
-          <Ionicons name="camera-outline" size={22} color="#1D3557" />
+          <Ionicons name="camera-outline" size={22} color={SellerTheme.text} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.iconBtn} onPress={() => void pickImage(false)}>
-          <Ionicons name="image-outline" size={22} color="#1D3557" />
+          <Ionicons name="image-outline" size={22} color={SellerTheme.text} />
         </TouchableOpacity>
         <TextInput
           ref={inputRef}
@@ -1110,7 +1314,7 @@ export default function SellerChatInterface({
               ? 'Ask about this photo…'
               : 'List a product, update price…'
           }
-          placeholderTextColor="#999"
+          placeholderTextColor={SellerTheme.textSecondary}
           multiline
           onFocus={() => {
             setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
@@ -1119,7 +1323,7 @@ export default function SellerChatInterface({
         <TouchableOpacity style={styles.sendBtn} onPress={() => send()} disabled={isLoading}>
           <Ionicons name="arrow-up" size={20} color="#fff" />
         </TouchableOpacity>
-      </View>
+      </GlassPane>
       {Platform.OS === 'ios' && keyboardHeight > 0 ? (
         <View style={{ height: keyboardHeight }} />
       ) : null}
@@ -1135,67 +1339,39 @@ export default function SellerChatInterface({
         onUndo={toast?.undo}
         onDismiss={() => setToast(null)}
       />
-
-      {sessionReady ? (
-        <SellerAiBriefFab
-          storeId={storeId}
-          stats={{
-            lowStock: brief.lowStock,
-            drafts: brief.drafts,
-            queries: brief.queries,
-            movers,
-          }}
-          narrative={aiNarrative}
-          priorities={aiPriorities}
-          done={doneToday}
-          bottomOffset={keyboardHeight > 0 ? keyboardHeight - 40 : 0}
-          onLowStock={() => {
-            void bumpStarterStat(storeId, 'Low stock');
-            void send('Which items are low on stock?');
-          }}
-          onDrafts={() => {
-            void bumpStarterStat(storeId, 'Drafts');
-            void send('Show my draft items');
-          }}
-          onQueries={() => router.push(`/seller/${storeId}/queries` as never)}
-          onDoneToday={async () => {
-            const next = { lowStock: true, drafts: true, queries: true };
-            setDoneToday(next);
-            await saveDoneToday(storeId, next);
-            successHaptic();
-            setToast({ message: 'Marked done for today ✓' });
-          }}
-        />
-      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  container: { flex: 1 },
   topBar: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
+    marginHorizontal: 14,
+    marginTop: 6,
+    marginBottom: 2,
+    gap: 10,
   },
-  newChatBtn: {
+  assistHint: {
+    flex: 1,
+    fontSize: 12,
+    color: SellerTheme.textSecondary,
+    fontWeight: '600',
+  },
+  topBarActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#EEF2F7',
+    gap: 4,
   },
-  newChatText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1D3557',
+  iconGhost: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 17,
+    backgroundColor: SellerTheme.chipIdle,
   },
   messages: { flex: 1 },
   emptyBody: {
@@ -1212,18 +1388,18 @@ const styles = StyleSheet.create({
   starterTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#111',
+    color: SellerTheme.text,
   },
-  starterSub: { fontSize: 12.5, color: '#8A8A8A' },
-  starterList: { gap: 8, paddingRight: 58 },
+  starterSub: { fontSize: 12.5, color: SellerTheme.textSecondary },
+  starterList: { gap: 8 },
   starterTile: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 11,
-    backgroundColor: '#fff',
+    backgroundColor: Glass.fill.light,
     borderWidth: 1,
-    borderColor: '#EAEAEA',
-    borderRadius: 12,
+    borderColor: Glass.stroke.lightOuter,
+    borderRadius: Glass.radius.md,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -1231,74 +1407,52 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#EEF2F7',
+    backgroundColor: 'rgba(61,123,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  starterText: { flex: 1, fontSize: 14, fontWeight: '600', color: '#222' },
+  starterText: { flex: 1, fontSize: 14, fontWeight: '600', color: SellerTheme.text },
   typingBubble: { paddingVertical: 14, paddingHorizontal: 16 },
   msgRow: { marginBottom: 8 },
   bubble: {
     maxWidth: '85%',
-    borderRadius: 12,
+    borderRadius: Glass.radius.md,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   botAlign: { alignSelf: 'flex-start' },
-  userBubble: { alignSelf: 'flex-end', backgroundColor: '#111' },
+  userBubble: {
+    alignSelf: 'flex-end',
+    backgroundColor: 'rgba(61,123,255,0.90)',
+    borderBottomRightRadius: 4,
+  },
   botBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: '#fff',
+    backgroundColor: Glass.fill.lightStrong,
     borderWidth: 1,
-    borderColor: '#E8E8E8',
+    borderColor: Glass.stroke.lightOuter,
+    borderBottomLeftRadius: 4,
   },
   bubbleImage: {
     width: 180,
     height: 180,
-    borderRadius: 10,
+    borderRadius: Glass.radius.sm,
     marginBottom: 8,
-    backgroundColor: '#333',
+    backgroundColor: 'rgba(24,30,54,0.08)',
   },
-  bubbleText: { fontSize: 15, color: '#111', lineHeight: 21 },
+  bubbleText: { fontSize: 15, color: SellerTheme.text, lineHeight: 21 },
   userText: { color: '#fff' },
-  typing: { color: '#888', fontStyle: 'italic', marginLeft: 8 },
+  typing: { color: SellerTheme.textSecondary, fontStyle: 'italic', marginLeft: 8 },
   previewRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#fff',
+    backgroundColor: Glass.fill.lightStrong,
   },
-  preview: { width: 56, height: 56, borderRadius: 8 },
-  previewLabel: { flex: 1, fontSize: 13, color: '#555' },
-  quickRow: {
-    maxHeight: 44,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  quickContent: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    gap: 8,
-    alignItems: 'center',
-  },
-  quickChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#EEF2F7',
-    borderRadius: 999,
-    marginRight: 8,
-  },
-  quickChipText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1D3557',
-  },
+  preview: { width: 56, height: 56, borderRadius: Glass.radius.sm },
+  previewLabel: { flex: 1, fontSize: 13, color: SellerTheme.textSecondary },
   bulkRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1307,7 +1461,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   bulkChip: {
-    backgroundColor: '#1D3557',
+    backgroundColor: 'rgba(61,123,255,0.90)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
@@ -1325,19 +1479,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 11,
-    borderRadius: 10,
-    backgroundColor: '#EEF2F7',
+    borderRadius: Glass.radius.pill,
+    backgroundColor: SellerTheme.chipIdle,
   },
   photoChoiceBtnPrimary: {
-    backgroundColor: '#1D3557',
+    backgroundColor: 'rgba(61,123,255,0.90)',
   },
   photoChoiceBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#1D3557',
+    color: SellerTheme.text,
   },
   photoChoiceBtnTextPrimary: {
     color: '#fff',
+  },
+  inputPane: {
+    marginHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 8,
   },
   inputRow: {
     flexDirection: 'row',
@@ -1345,26 +1504,30 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 10,
     paddingTop: 8,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#EEE',
   },
-  iconBtn: { padding: 8 },
+  iconBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
   input: {
     flex: 1,
+    minHeight: 36,
     maxHeight: 100,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: '#F3F3F3',
-    borderRadius: 18,
+    paddingVertical: Platform.OS === 'ios' ? 8 : 6,
+    backgroundColor: 'rgba(24,30,54,0.06)',
+    borderRadius: Glass.radius.md,
     fontSize: 15,
-    color: '#111',
+    color: SellerTheme.text,
   },
   sendBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#1D3557',
+    backgroundColor: 'rgba(61,123,255,0.94)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,

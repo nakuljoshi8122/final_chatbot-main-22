@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/shared/ui/ThemedText';
+import { GlassScreen, GlassPane } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 import { useApp } from '@/contexts/AppContext';
 
 const CATS = [
@@ -11,21 +13,21 @@ const CATS = [
     key: 'Skincare',
     label: 'Skincare',
     tag: 'skincare',
-    accent: '#2D6A4F',
+    accent: Glass.tint.teal,
     icon: 'water-outline' as const,
   },
   {
     key: 'Apparel',
     label: 'Apparels',
     tag: 'apparels',
-    accent: '#1D3557',
+    accent: Glass.tint.blue,
     icon: 'shirt-outline' as const,
   },
   {
     key: 'Handicrafts',
     label: 'Handicrafts',
     tag: 'handicrafts',
-    accent: '#9C6644',
+    accent: Glass.tint.pink,
     icon: 'color-palette-outline' as const,
   },
 ];
@@ -35,8 +37,15 @@ export default function BuyerCategoriesScreen() {
   const { setRole } = useApp();
 
   return (
+    <GlassScreen scheme="light">
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
+      <GlassPane
+        scheme="light"
+        intensity="regular"
+        radius={Glass.radius.lg}
+        style={styles.headerPane}
+        contentStyle={styles.header}
+      >
         <TouchableOpacity
           onPress={async () => {
             await setRole(null);
@@ -44,11 +53,11 @@ export default function BuyerCategoriesScreen() {
           }}
           hitSlop={10}
         >
-          <Ionicons name="arrow-back" size={22} color="#111" />
+          <Ionicons name="arrow-back" size={22} color={Glass.ink.light} />
         </TouchableOpacity>
         <ThemedText style={styles.title}>Shop by category</ThemedText>
         <View style={{ width: 22 }} />
-      </View>
+      </GlassPane>
 
       <View style={styles.body}>
         <ThemedText style={styles.subtitle}>
@@ -57,47 +66,58 @@ export default function BuyerCategoriesScreen() {
         {CATS.map((c) => (
           <TouchableOpacity
             key={c.key}
-            style={[styles.card, { borderLeftColor: c.accent }]}
+            style={styles.card}
             onPress={() => router.push(`/buyer/${c.key}`)}
             activeOpacity={0.85}
           >
+            <GlassPane
+              scheme="light"
+              intensity="regular"
+              radius={Glass.radius.lg}
+              noBlur
+              contentStyle={styles.cardContent}
+            >
             <View style={[styles.icon, { backgroundColor: c.accent }]}>
               <Ionicons name={c.icon} size={24} color="#fff" />
             </View>
             <ThemedText style={styles.cardTitle}>{c.label}</ThemedText>
-            <Ionicons name="chevron-forward" size={18} color="#888" />
+            <Ionicons name="chevron-forward" size={18} color={Glass.ink.lightTertiary} />
+            </GlassPane>
           </TouchableOpacity>
         ))}
       </View>
     </SafeAreaView>
+    </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F4F2' },
+  container: { flex: 1, backgroundColor: 'transparent' },
+  headerPane: {
+    marginHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 6,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E6E6E6',
   },
-  title: { fontSize: 17, fontWeight: '700', color: '#111' },
+  title: { fontSize: 17, fontWeight: '700', color: Glass.ink.light },
   body: { padding: 16 },
-  subtitle: { fontSize: 14, color: '#666', marginBottom: 18, lineHeight: 20 },
-  card: {
+  subtitle: {
+    fontSize: 14,
+    color: Glass.ink.lightSecondary,
+    marginBottom: 18,
+    lineHeight: 20,
+  },
+  card: { marginBottom: 12 },
+  cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E6E6E6',
-    borderLeftWidth: 4,
     gap: 12,
   },
   icon: {
@@ -107,5 +127,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#111' },
+  cardTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: Glass.ink.light },
 });

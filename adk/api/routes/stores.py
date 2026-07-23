@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from api.schemas import StoreCreateIn
+from api.schemas import StoreCreateIn, StoreDeleteIn
 
 router = APIRouter(tags=["stores"])
 
@@ -24,6 +24,14 @@ async def post_store(body: StoreCreateIn):
         return {"ok": True, "store": row}
     except ValueError as e:
         return {"ok": False, "error": str(e)}
+
+
+@router.delete("/stores/{store_id}")
+async def delete_store_endpoint(store_id: str, body: StoreDeleteIn):
+    """Delete a shop after the seller types the store name to confirm."""
+    from stores.store_registry import delete_store
+
+    return delete_store(store_id, body.confirm_name)
 
 
 @router.get("/stores/{store_id}")

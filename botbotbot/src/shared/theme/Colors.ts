@@ -1,27 +1,27 @@
 /**
- * ShopAssist-themed app colors.
+ * ShopAssist app colors, tuned for the Liquid Glass look.
  */
 
-const tintColorLight = '#000000';
-const tintColorDark = '#FFFFFF';
+const tintColorLight = '#101425';
+const tintColorDark = '#F4F6FF';
 
 export const Colors = {
   light: {
-    text: '#111111',
-    background: '#FFFFFF',
+    text: '#101425',
+    background: '#EFF3FE',
     tint: tintColorLight,
-    icon: '#767676',
-    tabIconDefault: '#767676',
+    icon: 'rgba(24,30,54,0.70)',
+    tabIconDefault: 'rgba(24,30,54,0.58)',
     tabIconSelected: tintColorLight,
-    border: '#E0E0E0',
+    border: 'rgba(122,132,166,0.28)',
   },
   dark: {
-    text: '#F5F5F5',
-    background: '#111111',
+    text: '#F4F6FF',
+    background: '#0B1020',
     tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
+    icon: 'rgba(235,240,255,0.62)',
+    tabIconDefault: 'rgba(235,240,255,0.45)',
     tabIconSelected: tintColorDark,
-    border: '#333333',
+    border: 'rgba(255,255,255,0.14)',
   },
 };

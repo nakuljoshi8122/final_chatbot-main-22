@@ -25,5 +25,5 @@ export default function SellerChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  container: { flex: 1, backgroundColor: 'transparent' },
 });

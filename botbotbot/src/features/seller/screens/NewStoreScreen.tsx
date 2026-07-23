@@ -16,6 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/shared/ui/ThemedText';
 import { createStore } from '@/services/storesApi';
 import { useApp } from '@/contexts/AppContext';
+import { GlassPane, GlassPill, GlassScreen } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
+import { SellerTheme } from '@/shared/theme/SellerTheme';
 
 const CATEGORIES = ['Skincare', 'Apparel', 'Handicrafts'] as const;
 
@@ -60,26 +63,35 @@ export default function NewStoreScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-          <Ionicons name="close" size={24} color="#111" />
-        </TouchableOpacity>
-        <ThemedText style={styles.title}>Open a new store</ThemedText>
-        <View style={{ width: 24 }} />
-      </View>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 56 : 0}
-      >
-        <ScrollView
-          contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
+    <GlassScreen scheme="light">
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <GlassPane scheme="light" intensity="regular" radius={0} flat>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
+              <Ionicons name="close" size={24} color={Glass.ink.light} />
+            </TouchableOpacity>
+            <ThemedText style={styles.title}>Open a new store</ThemedText>
+            <View style={{ width: 24 }} />
+          </View>
+        </GlassPane>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 56 : 0}
         >
+          <ScrollView
+            contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+          >
         <ThemedText style={styles.label}>Store name *</ThemedText>
-        <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Glow Lab" />
+        <TextInput
+          style={styles.input}
+          value={name}
+          onChangeText={setName}
+          placeholder="Glow Lab"
+          placeholderTextColor={SellerTheme.textSecondary}
+        />
 
         <ThemedText style={styles.label}>Owner name *</ThemedText>
         <TextInput
@@ -87,6 +99,7 @@ export default function NewStoreScreen() {
           value={ownerName}
           onChangeText={setOwnerName}
           placeholder="Your name"
+          placeholderTextColor={SellerTheme.textSecondary}
         />
 
         <ThemedText style={styles.label}>Category / domain *</ThemedText>
@@ -94,12 +107,18 @@ export default function NewStoreScreen() {
           {CATEGORIES.map((c) => (
             <TouchableOpacity
               key={c}
-              style={[styles.chip, category === c && styles.chipOn]}
               onPress={() => setCategory(c)}
             >
-              <ThemedText style={[styles.chipText, category === c && styles.chipTextOn]}>
-                {c === 'Apparel' ? 'Apparels' : c}
-              </ThemedText>
+              <GlassPill
+                scheme="light"
+                active={category === c}
+                activeColor={SellerTheme.chipActive}
+                style={styles.chip}
+              >
+                <ThemedText style={[styles.chipText, category === c && styles.chipTextOn]}>
+                  {c === 'Apparel' ? 'Apparels' : c}
+                </ThemedText>
+              </GlassPill>
             </TouchableOpacity>
           ))}
         </View>
@@ -111,6 +130,7 @@ export default function NewStoreScreen() {
           onChangeText={setOwnerEmail}
           keyboardType="email-address"
           autoCapitalize="none"
+          placeholderTextColor={SellerTheme.textSecondary}
         />
 
         <ThemedText style={styles.label}>Owner phone</ThemedText>
@@ -119,6 +139,7 @@ export default function NewStoreScreen() {
           value={ownerPhone}
           onChangeText={setOwnerPhone}
           keyboardType="phone-pad"
+          placeholderTextColor={SellerTheme.textSecondary}
         />
 
         <ThemedText style={styles.label}>Description</ThemedText>
@@ -127,10 +148,16 @@ export default function NewStoreScreen() {
           value={description}
           onChangeText={setDescription}
           multiline
+          placeholderTextColor={SellerTheme.textSecondary}
         />
 
         <ThemedText style={styles.label}>Address</ThemedText>
-        <TextInput style={styles.input} value={address} onChangeText={setAddress} />
+        <TextInput
+          style={styles.input}
+          value={address}
+          onChangeText={setAddress}
+          placeholderTextColor={SellerTheme.textSecondary}
+        />
 
         <TouchableOpacity
           style={styles.submit}
@@ -144,52 +171,49 @@ export default function NewStoreScreen() {
             <ThemedText style={styles.submitText}>Create store</ThemedText>
           )}
         </TouchableOpacity>
-      </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F4F2' },
+  container: { flex: 1, backgroundColor: 'transparent' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E6E6E6',
   },
-  title: { fontSize: 17, fontWeight: '700', color: '#111' },
-  label: { fontSize: 13, fontWeight: '600', color: '#444', marginBottom: 6, marginTop: 12 },
+  title: { fontSize: 17, fontWeight: '700', color: SellerTheme.text },
+  label: { fontSize: 13, fontWeight: '700', color: SellerTheme.text, marginBottom: 6, marginTop: 12 },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: Glass.fill.light,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
+    borderColor: Glass.stroke.lightOuter,
+    borderRadius: Glass.radius.sm,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 15,
-    color: '#111',
+    color: SellerTheme.text,
   },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#E8E8E8',
+    borderRadius: Glass.radius.pill,
   },
-  chipOn: { backgroundColor: '#1D3557' },
-  chipText: { color: '#333', fontWeight: '600' },
-  chipTextOn: { color: '#fff' },
+  chipText: { color: SellerTheme.text, fontWeight: '600' },
+  chipTextOn: { color: SellerTheme.chipActiveText },
   submit: {
     marginTop: 24,
-    backgroundColor: '#1D3557',
-    borderRadius: 10,
+    backgroundColor: Glass.tint.blue,
+    borderRadius: Glass.radius.pill,
     paddingVertical: 16,
     alignItems: 'center',
+    ...Glass.shadowSoft,
   },
   submitText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });

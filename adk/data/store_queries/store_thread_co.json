@@ -1,5 +1,27 @@
 [
   {
+    "id": "q_417c2b78c1",
+    "store_id": "store_thread_co",
+    "question": "Do you guys sell shoes",
+    "notes": "auto: buyer ask safety net",
+    "session_id": "session_1784616590984_y09b4niwc",
+    "status": "open",
+    "answer": "",
+    "created_at": "2026-07-21T11:40:00.236811+00:00",
+    "updated_at": "2026-07-21T11:40:00.236818+00:00"
+  },
+  {
+    "id": "q_dac26652f6",
+    "store_id": "store_thread_co",
+    "question": "shoes",
+    "notes": "",
+    "session_id": "session_1784616590984_y09b4niwc",
+    "status": "open",
+    "answer": "",
+    "created_at": "2026-07-21T11:39:58.929826+00:00",
+    "updated_at": "2026-07-21T11:39:58.929834+00:00"
+  },
+  {
     "id": "q_abfbf05b4e",
     "store_id": "store_thread_co",
     "question": "I want skin care too",

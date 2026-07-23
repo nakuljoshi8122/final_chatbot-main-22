@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Brand } from '@/shared/theme/Brand';
+import { Glass } from '@/shared/theme/LiquidGlass';
 import { TileProduct } from '@/shared/utils/parseTiles';
 import { getProductDiscount, withDollar } from '@/shared/utils/productDiscount';
 
@@ -190,37 +191,42 @@ const styles = StyleSheet.create({
   },
   card: {
     width: TILE_WIDTH,
-    backgroundColor: Brand.colors.accent,
-    borderWidth: 1,
-    borderColor: Brand.colors.border,
-    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.stroke.lightOuter,
+    borderRadius: Glass.radius.md,
     flex: 1,
+    ...(Glass.shadowSoft as object),
   },
   cardPressed: {
-    borderColor: Brand.colors.primary,
+    borderColor: Glass.tint.blue,
+    backgroundColor: 'rgba(255,255,255,0.86)',
   },
   imageWrap: {
     position: 'relative',
+    borderTopLeftRadius: Glass.radius.md,
+    borderTopRightRadius: Glass.radius.md,
+    overflow: 'hidden',
   },
   image: {
     width: TILE_WIDTH,
     height: 120,
-    backgroundColor: Brand.colors.background,
+    backgroundColor: 'rgba(255,255,255,0.55)',
   },
   imageFallback: {
     width: TILE_WIDTH,
     height: 120,
-    backgroundColor: Brand.colors.background,
+    backgroundColor: 'rgba(255,255,255,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: Brand.colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Glass.stroke.lightOuter,
   },
   promoBadge: {
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: '#C62828',
+    backgroundColor: Glass.tint.red,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
@@ -248,8 +254,10 @@ const styles = StyleSheet.create({
   },
   tagBadge: {
     borderWidth: 1,
-    borderColor: Brand.colors.border,
-    paddingHorizontal: 4,
+    borderColor: Glass.stroke.lightOuter,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderRadius: Glass.radius.pill,
+    paddingHorizontal: 6,
     paddingVertical: 2,
   },
   tagText: {
@@ -273,7 +281,7 @@ const styles = StyleSheet.create({
   listPrice: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#C62828',
+    color: Glass.tint.red,
     textDecorationLine: 'line-through',
   },
   salePrice: {
@@ -298,20 +306,22 @@ const styles = StyleSheet.create({
   showMoreCard: {
     width: 112,
     minHeight: 180,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#000000',
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.stroke.lightOuter,
+    borderRadius: Glass.radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 10,
+    ...(Glass.shadowSoft as object),
   },
   showMoreBtnPressed: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: 'rgba(255,255,255,0.86)',
   },
   showMoreText: {
     fontSize: 11,
-    color: '#000000',
-    fontWeight: '500',
+    color: Glass.ink.light,
+    fontWeight: '600',
   },
 });

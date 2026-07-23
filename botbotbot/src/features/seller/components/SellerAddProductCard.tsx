@@ -14,10 +14,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import {
+  SellerTheme,
   SellerCategory,
   SELLER_CATEGORIES,
 } from '@/shared/theme/SellerTheme';
 import { createInventoryItem, InventoryItem } from '@/services/inventoryStore';
+import { patchSellerProduct } from '@/services/patchSellerProduct';
 import {
   CATEGORY_TEMPLATES,
   PRICE_PRESETS,
@@ -36,6 +38,8 @@ import { successHaptic, tapHaptic } from '@/shared/utils/sellerHaptics';
 import { fetchStoreProducts } from '@/services/storesApi';
 import { guessProductFromImage } from '@/services/visionGuessApi';
 import { fetchAiListingFromImage, fetchAiBatchPhotos } from '@/services/sellerAiApi';
+import { GlassPane, GlassPill } from '@/shared/ui/Glass';
+import { Glass } from '@/shared/theme/LiquidGlass';
 
 export type AddProductSummary = {
   sku: string;
@@ -64,6 +68,29 @@ type Props = {
   prefills?: Partial<LastListedProduct> | null;
   /** Remaining photos from a prior batch continue. */
   initialQueue?: { uri: string; base64?: string }[];
+  /** Live draft sync for seller chat context. */
+  onDraftChange?: (draft: {
+    in_progress: boolean;
+    name?: string;
+    price?: string;
+    quantity?: string;
+    category?: string;
+    description?: string;
+    hasPhoto?: boolean;
+    source?: string;
+    sku?: string;
+  }) => void;
+  /** Fields merged from agent chat replies into the open form. */
+  chatSync?: {
+    name?: string;
+    price?: string;
+    quantity?: string;
+    category?: string;
+    description?: string;
+    sku?: string;
+  } | null;
+  /** Draft SKU from a prior chat/form sync (catalog status=draft until List product). */
+  initialDraftSku?: string;
 };
 
 function normalizeCategory(raw: string): SellerCategory {
@@ -78,6 +105,11 @@ function normalizeCategory(raw: string): SellerCategory {
 
 type Step = 1 | 2 | 3;
 
+function nextDraftSku(cat: SellerCategory): string {
+  const prefix = { Skincare: 'SK', Apparel: 'AP', Handicrafts: 'HC' }[cat] || 'HC';
+  return `${prefix}-NEW-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+}
+
 export default function SellerAddProductCard({
   storeId,
   defaultCategory,
@@ -85,6 +117,9 @@ export default function SellerAddProductCard({
   initialPhoto = null,
   prefills = null,
   initialQueue = [],
+  onDraftChange,
+  chatSync = null,
+  initialDraftSku = '',
 }: Props) {
   const [step, setStep] = useState<Step>(initialPhoto ? 2 : 1);
   const [name, setName] = useState(prefills?.name || '');
@@ -117,6 +152,7 @@ export default function SellerAddProductCard({
   const [categoryAvgs, setCategoryAvgs] = useState<Record<string, number>>({});
   const [batchAiTip, setBatchAiTip] = useState<string | null>(null);
   const [aiListingReady, setAiListingReady] = useState(false);
+  const [draftSku, setDraftSku] = useState(initialDraftSku || '');
   const draftHydrated = React.useRef(false);
   const visionForUri = React.useRef<string | null>(null);
   const { isRecording, startRecording, stopRecording, isInitialized } =
@@ -188,6 +224,10 @@ export default function SellerAddProductCard({
 
   // Autosave draft (Tier 9)
   useEffect(() => {
+    if (initialDraftSku) setDraftSku(initialDraftSku);
+  }, [initialDraftSku]);
+
+  useEffect(() => {
     const t = setTimeout(() => {
       void saveFormDraft({
         storeId,
@@ -200,9 +240,80 @@ export default function SellerAddProductCard({
         photoUri: photo?.uri,
         updatedAt: new Date().toISOString(),
       });
+      onDraftChange?.({
+        in_progress: true,
+        name: name.trim() || undefined,
+        price: price.trim() || undefined,
+        quantity: quantity.trim() || undefined,
+        category,
+        description: description.trim() || undefined,
+        hasPhoto: !!photo?.uri,
+        source: 'form',
+        sku: draftSku || undefined,
+      });
     }, 600);
     return () => clearTimeout(t);
-  }, [storeId, step, name, price, category, quantity, description, photo?.uri]);
+  }, [
+    storeId,
+    step,
+    name,
+    price,
+    category,
+    quantity,
+    description,
+    photo?.uri,
+    draftSku,
+    onDraftChange,
+  ]);
+
+  // Sync form edits to catalog as draft (until List product publishes active).
+  useEffect(() => {
+    if (!name.trim()) return;
+    const t = setTimeout(() => {
+      void (async () => {
+        const sku = draftSku || nextDraftSku(category);
+        const priceStr = price.trim()
+          ? price.trim().startsWith('$')
+            ? price.trim()
+            : `$${price.trim()}`
+          : '';
+        const qty = Math.max(0, Math.floor(Number(quantity) || 0));
+        const ok = await patchSellerProduct({
+          sku,
+          name: name.trim(),
+          store_id: storeId,
+          category,
+          price: priceStr || undefined,
+          quantity: qty,
+          description: description.trim() || undefined,
+          status: 'draft',
+          img: photo?.uri,
+        });
+        if (ok && !draftSku) setDraftSku(sku);
+      })();
+    }, 900);
+    return () => clearTimeout(t);
+  }, [
+    name,
+    price,
+    quantity,
+    category,
+    description,
+    photo?.uri,
+    draftSku,
+    storeId,
+  ]);
+
+  useEffect(() => {
+    if (!chatSync) return;
+    if (chatSync.name) setName(chatSync.name);
+    if (chatSync.price) setPrice(String(chatSync.price).replace(/^\$/, ''));
+    if (chatSync.quantity != null) setQuantity(String(chatSync.quantity));
+    if (chatSync.category) setCategory(normalizeCategory(String(chatSync.category)));
+    if (chatSync.description) setDescription(chatSync.description);
+    if (chatSync.sku) setDraftSku(chatSync.sku);
+    if (chatSync.name || chatSync.price || chatSync.quantity) setStep(2);
+  }, [chatSync]);
 
   const templates = CATEGORY_TEMPLATES[category] || [];
   const canList = !!name.trim() && !!price.trim() && quantity.trim() !== '';
@@ -448,18 +559,53 @@ export default function SellerAddProductCard({
     try {
       const qty = Math.max(0, Math.floor(Number(quantity) || 0));
       const priceStr = price.trim().startsWith('$') ? price.trim() : `$${price.trim()}`;
-      const item = await createInventoryItem({
-        name: name.trim(),
-        price: priceStr,
-        category,
-        quantity: qty,
-        description: description.trim(),
-        categoryNotes: '',
-        status: 'active',
-        imageUri: photo?.uri,
-        imageUris: photos.map((p) => p.uri),
-        storeId,
-      });
+      let item: InventoryItem;
+      if (draftSku) {
+        const ok = await patchSellerProduct({
+          sku: draftSku,
+          name: name.trim(),
+          store_id: storeId,
+          category,
+          price: priceStr,
+          quantity: qty,
+          description: description.trim(),
+          status: 'active',
+          img: photo?.uri,
+        });
+        if (!ok) {
+          throw new Error('Could not publish listing. Check the backend and try again.');
+        }
+        item = {
+          id: draftSku,
+          sku: draftSku,
+          name: name.trim(),
+          category,
+          price: priceStr,
+          description: description.trim(),
+          categoryNotes: '',
+          quantity: qty,
+          status: 'active',
+          imageUri: photo?.uri || '',
+          imageUris: photos.map((p) => p.uri),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          source: 'seller',
+          storeId,
+        };
+      } else {
+        item = await createInventoryItem({
+          name: name.trim(),
+          price: priceStr,
+          category,
+          quantity: qty,
+          description: description.trim(),
+          categoryNotes: '',
+          status: 'active',
+          imageUri: photo?.uri,
+          imageUris: photos.map((p) => p.uri),
+          storeId,
+        });
+      }
       await saveLastListed({
         storeId,
         name: item.name,
@@ -503,7 +649,15 @@ export default function SellerAddProductCard({
   );
 
   return (
-    <View style={styles.card}>
+    <GlassPane
+      scheme="light"
+      intensity="regular"
+      radius={Glass.radius.lg}
+      noBlur
+      flat
+      style={styles.card}
+      contentStyle={styles.cardContent}
+    >
       <View style={styles.header}>
         <Text style={styles.headerTitle}>New product</Text>
         <Text style={styles.stepPill}>{stepLabel}</Text>
@@ -545,7 +699,7 @@ export default function SellerAddProductCard({
 
       {analyzingPhoto ? (
         <View style={styles.banner}>
-          <ActivityIndicator size="small" color="#1D3557" />
+          <ActivityIndicator size="small" color={Glass.tint.blue} />
           <Text style={styles.bannerText}>Reading photo for name & description…</Text>
         </View>
       ) : null}
@@ -583,7 +737,7 @@ export default function SellerAddProductCard({
                     style={styles.addThumb}
                     onPress={() => void pickPhoto(true, 'append')}
                   >
-                    <Ionicons name="add" size={22} color="#1D3557" />
+                    <Ionicons name="add" size={22} color={Glass.tint.blue} />
                     <Text style={styles.addThumbText}>Add</Text>
                   </TouchableOpacity>
                 ) : null}
@@ -591,7 +745,7 @@ export default function SellerAddProductCard({
             </ScrollView>
           ) : (
             <View style={styles.photoPlaceholder}>
-              <Ionicons name="camera-outline" size={36} color="#8A8A8A" />
+              <Ionicons name="camera-outline" size={36} color={SellerTheme.textSecondary} />
             </View>
           )}
           {photoQueue.length > 0 ? (
@@ -602,7 +756,7 @@ export default function SellerAddProductCard({
           ) : null}
           {photo?.base64 ? (
             <TouchableOpacity
-              style={[styles.primaryBtn, { backgroundColor: '#2D5A87' }]}
+              style={[styles.primaryBtn, { backgroundColor: 'rgba(106,91,255,0.94)' }]}
               onPress={() => void aiAutoFillListing()}
               disabled={analyzingPhoto}
             >
@@ -668,7 +822,7 @@ export default function SellerAddProductCard({
                 value={name}
                 onChangeText={setName}
                 placeholder="Product name"
-                placeholderTextColor="#999"
+                placeholderTextColor={SellerTheme.textSecondary}
               />
               <TouchableOpacity
                 style={[styles.mic, listening === 'name' && styles.micOn]}
@@ -677,7 +831,7 @@ export default function SellerAddProductCard({
                 <Ionicons
                   name={listening === 'name' && isRecording ? 'stop' : 'mic-outline'}
                   size={18}
-                  color={listening === 'name' ? '#fff' : '#1D3557'}
+                  color={listening === 'name' ? '#fff' : Glass.tint.blue}
                 />
               </TouchableOpacity>
             </View>
@@ -696,7 +850,7 @@ export default function SellerAddProductCard({
                 }}
                 keyboardType="decimal-pad"
                 placeholder="28"
-                placeholderTextColor="#999"
+                placeholderTextColor={SellerTheme.textSecondary}
               />
               <TouchableOpacity
                 style={[styles.mic, listening === 'price' && styles.micOn]}
@@ -705,7 +859,7 @@ export default function SellerAddProductCard({
                 <Ionicons
                   name={listening === 'price' && isRecording ? 'stop' : 'mic-outline'}
                   size={18}
-                  color={listening === 'price' ? '#fff' : '#1D3557'}
+                  color={listening === 'price' ? '#fff' : Glass.tint.blue}
                 />
               </TouchableOpacity>
             </View>
@@ -744,7 +898,7 @@ export default function SellerAddProductCard({
             <Text style={styles.label}>Qty *</Text>
             <View style={styles.qtyRow}>
               <TouchableOpacity style={styles.qtyBtn} onPress={() => bumpQty(-1)}>
-                <Ionicons name="remove" size={18} color="#111" />
+                <Ionicons name="remove" size={18} color={SellerTheme.text} />
               </TouchableOpacity>
               <TextInput
                 style={styles.qtyInput}
@@ -753,7 +907,7 @@ export default function SellerAddProductCard({
                 keyboardType="number-pad"
               />
               <TouchableOpacity style={styles.qtyBtn} onPress={() => bumpQty(1)}>
-                <Ionicons name="add" size={18} color="#111" />
+                <Ionicons name="add" size={18} color={SellerTheme.text} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.preset} onPress={() => setQuantity('10')}>
                 <Text style={styles.presetText}>10</Text>
@@ -766,19 +920,25 @@ export default function SellerAddProductCard({
 
           <View style={styles.catRow}>
             {SELLER_CATEGORIES.map((c) => (
-              <TouchableOpacity
+              <GlassPill
                 key={c}
-                style={[styles.catChip, category === c && styles.catChipOn]}
-                onPress={() => {
-                  setCategory(c);
-                  const avg = categoryAvgs[c];
-                  if (avg) setPriceHint(`~$${avg} avg in ${c}`);
-                }}
+                scheme="light"
+                active={category === c}
+                activeColor={SellerTheme.chipActive}
               >
-                <Text style={[styles.catChipText, category === c && styles.catChipTextOn]}>
-                  {c}
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.catChip}
+                  onPress={() => {
+                    setCategory(c);
+                    const avg = categoryAvgs[c];
+                    if (avg) setPriceHint(`~$${avg} avg in ${c}`);
+                  }}
+                >
+                  <Text style={[styles.catChipText, category === c && styles.catChipTextOn]}>
+                    {c}
+                  </Text>
+                </TouchableOpacity>
+              </GlassPill>
             ))}
           </View>
 
@@ -794,7 +954,7 @@ export default function SellerAddProductCard({
                 value={description}
                 onChangeText={setDescription}
                 placeholder="Optional description"
-                placeholderTextColor="#999"
+                placeholderTextColor={SellerTheme.textSecondary}
                 multiline
               />
               <Text style={styles.label}>
@@ -820,13 +980,13 @@ export default function SellerAddProductCard({
                         style={styles.addThumb}
                         onPress={() => void pickPhoto(true, 'append')}
                       >
-                        <Ionicons name="camera" size={18} color="#1D3557" />
+                        <Ionicons name="camera" size={18} color={Glass.tint.blue} />
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.addThumb}
                         onPress={() => void pickPhoto(false, 'append')}
                       >
-                        <Ionicons name="images-outline" size={18} color="#1D3557" />
+                        <Ionicons name="images-outline" size={18} color={Glass.tint.blue} />
                       </TouchableOpacity>
                     </>
                   ) : null}
@@ -898,7 +1058,7 @@ export default function SellerAddProductCard({
           </TouchableOpacity>
         </View>
       ) : null}
-    </View>
+    </GlassPane>
   );
 }
 
@@ -914,7 +1074,7 @@ function SummaryLine({
   return (
     <View style={styles.summaryLine}>
       <Text style={styles.summaryLabel}>{label}</Text>
-      <Text style={[styles.summaryValue, muted && { color: '#999' }]} numberOfLines={1}>
+      <Text style={[styles.summaryValue, muted && { color: SellerTheme.textSecondary }]} numberOfLines={1}>
         {value}
       </Text>
     </View>
@@ -931,11 +1091,13 @@ function ScrollChips({
   return (
     <View style={styles.templateRow}>
       {items.map((label, i) => (
-        <TouchableOpacity key={label} style={styles.templateChip} onPress={() => onPick(i)}>
-          <Text style={styles.templateText} numberOfLines={1}>
-            {label}
-          </Text>
-        </TouchableOpacity>
+        <GlassPill key={label} scheme="light" style={styles.templatePill}>
+          <TouchableOpacity style={styles.templateChip} onPress={() => onPick(i)}>
+            <Text style={styles.templateText} numberOfLines={1}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        </GlassPill>
       ))}
     </View>
   );
@@ -967,7 +1129,15 @@ export function AddProductSummaryCard({
     },
   ];
   return (
-    <View style={styles.card}>
+    <GlassPane
+      scheme="light"
+      intensity="regular"
+      radius={Glass.radius.lg}
+      noBlur
+      flat
+      style={styles.card}
+      contentStyle={styles.cardContent}
+    >
       <View style={styles.header}>
         <Ionicons name="checkmark-circle" size={18} color="#1B7F4E" />
         <Text style={[styles.headerTitle, { color: '#1B7F4E' }]}>Listed</Text>
@@ -1001,18 +1171,17 @@ export function AddProductSummaryCard({
           </TouchableOpacity>
         ) : null}
       </View>
-    </View>
+    </GlassPane>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E6E6E6',
-    padding: 12,
+    borderRadius: Glass.radius.lg,
     marginTop: 6,
+  },
+  cardContent: {
+    padding: 12,
     gap: 8,
   },
   header: {
@@ -1021,45 +1190,47 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  headerTitle: { fontSize: 15, fontWeight: '800', color: '#111' },
+  headerTitle: { fontSize: 15, fontWeight: '800', color: SellerTheme.text },
   stepPill: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#1D3557',
-    backgroundColor: '#EEF2F7',
+    color: SellerTheme.text,
+    backgroundColor: SellerTheme.chipIdle,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
   },
   progress: { flexDirection: 'row', gap: 6 },
-  bar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: '#E8E8E8' },
-  barOn: { backgroundColor: '#1D3557' },
+  bar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: SellerTheme.stepperBg },
+  barOn: { backgroundColor: Glass.tint.blue },
   stepBody: { gap: 10 },
-  hint: { fontSize: 12.5, color: '#777', lineHeight: 17 },
+  hint: { fontSize: 12.5, color: SellerTheme.textSecondary, lineHeight: 17 },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#EEF2F7',
+    backgroundColor: 'rgba(24,30,54,0.06)',
     paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: Glass.radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.stroke.lightOuter,
   },
-  bannerText: { flex: 1, fontSize: 12, fontWeight: '700', color: '#1D3557' },
-  bannerLink: { fontSize: 12, fontWeight: '800', color: '#1D3557' },
-  bannerMuted: { fontSize: 12, fontWeight: '600', color: '#888' },
-  queueHint: { fontSize: 12, fontWeight: '700', color: '#1D3557' },
+  bannerText: { flex: 1, fontSize: 12, fontWeight: '700', color: SellerTheme.text },
+  bannerLink: { fontSize: 12, fontWeight: '800', color: Glass.tint.blue },
+  bannerMuted: { fontSize: 12, fontWeight: '600', color: SellerTheme.textSecondary },
+  queueHint: { fontSize: 12, fontWeight: '700', color: Glass.tint.blue },
   heroPhoto: { width: '100%', height: 160, borderRadius: 12, backgroundColor: '#F2F2F2' },
   photoStrip: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
   thumbWrap: { position: 'relative' },
-  thumbPhoto: { width: 72, height: 72, borderRadius: 10, backgroundColor: '#F2F2F2' },
+  thumbPhoto: { width: 72, height: 72, borderRadius: Glass.radius.sm, backgroundColor: SellerTheme.surface },
   thumbRemove: {
     position: 'absolute',
     top: 4,
     right: 4,
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Glass.radius.sm,
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1082,32 +1253,32 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#D7DEE8',
+    borderColor: Glass.stroke.lightOuter,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F7F9FC',
+    backgroundColor: 'rgba(24,30,54,0.06)',
     gap: 2,
   },
-  addThumbText: { fontSize: 11, fontWeight: '700', color: '#1D3557' },
+  addThumbText: { fontSize: 11, fontWeight: '700', color: SellerTheme.text },
   photoPlaceholder: {
     height: 120,
-    borderRadius: 12,
-    backgroundColor: '#F5F5F5',
+    borderRadius: Glass.radius.md,
+    backgroundColor: 'rgba(24,30,54,0.06)',
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: Glass.stroke.lightOuter,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  smallPhoto: { width: 72, height: 72, borderRadius: 8, backgroundColor: '#F2F2F2' },
+  smallPhoto: { width: 72, height: 72, borderRadius: Glass.radius.sm, backgroundColor: SellerTheme.surface },
   primaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#1D3557',
-    borderRadius: 12,
+    backgroundColor: 'rgba(61,123,255,0.94)',
+    borderRadius: Glass.radius.pill,
     height: 46,
   },
   primaryText: { color: '#fff', fontWeight: '800', fontSize: 15 },
@@ -1116,45 +1287,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#EEF2F7',
+    borderRadius: Glass.radius.pill,
+    backgroundColor: SellerTheme.chipIdle,
   },
-  secondaryText: { color: '#1D3557', fontWeight: '700', fontSize: 13 },
+  secondaryText: { color: SellerTheme.text, fontWeight: '700', fontSize: 13 },
   rowBtns: { flexDirection: 'row', gap: 8 },
   field: { gap: 6 },
-  label: { fontSize: 12, fontWeight: '700', color: '#555' },
+  label: { fontSize: 12, fontWeight: '700', color: SellerTheme.text },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   input: {
     flex: 1,
-    backgroundColor: '#F7F7F7',
+    backgroundColor: 'rgba(24,30,54,0.06)',
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
+    borderColor: Glass.stroke.lightOuter,
+    borderRadius: Glass.radius.sm,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 15,
-    color: '#111',
+    color: SellerTheme.text,
   },
   inputMulti: { minHeight: 64, textAlignVertical: 'top' },
-  dollar: { fontSize: 18, fontWeight: '800', color: '#1D3557' },
+  dollar: { fontSize: 18, fontWeight: '800', color: Glass.tint.blue },
   mic: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#EEF2F7',
+    backgroundColor: SellerTheme.chipIdle,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  micOn: { backgroundColor: '#B00020' },
+  micOn: { backgroundColor: Glass.tint.red },
   presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   preset: {
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: '#EEF2F7',
+    backgroundColor: SellerTheme.chipIdle,
   },
-  presetOn: { backgroundColor: '#1D3557' },
-  presetText: { fontSize: 12, fontWeight: '700', color: '#1D3557' },
+  presetOn: { backgroundColor: Glass.tint.blue },
+  presetText: { fontSize: 12, fontWeight: '700', color: SellerTheme.text },
   presetTextOn: { color: '#fff' },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   qtyBtn: {
@@ -1162,53 +1333,44 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#DDD',
+    borderColor: Glass.stroke.lightOuter,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: SellerTheme.chipIdle,
   },
   qtyInput: {
     width: 56,
     textAlign: 'center',
     fontSize: 18,
     fontWeight: '800',
-    color: '#111',
-    backgroundColor: '#F7F7F7',
+    color: SellerTheme.text,
+    backgroundColor: 'rgba(24,30,54,0.06)',
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
+    borderColor: Glass.stroke.lightOuter,
+    borderRadius: Glass.radius.sm,
     paddingVertical: 8,
   },
   catRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   catChip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#DDD',
   },
-  catChipOn: { backgroundColor: '#1D3557', borderColor: '#1D3557' },
-  catChipText: { fontSize: 13, fontWeight: '600', color: '#333' },
-  catChipTextOn: { color: '#fff' },
+  catChipText: { fontSize: 13, fontWeight: '600', color: SellerTheme.text },
+  catChipTextOn: { color: SellerTheme.chipActiveText },
   moreLink: {
     textAlign: 'center',
-    color: '#1D3557',
+    color: Glass.tint.blue,
     fontWeight: '700',
     fontSize: 13,
     paddingVertical: 4,
   },
   templateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   templateChip: {
-    maxWidth: '48%',
     paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#F3F8F5',
-    borderWidth: 1,
-    borderColor: '#CDE5D6',
   },
-  templateText: { fontSize: 12, fontWeight: '700', color: '#1B7F4E' },
+  templatePill: { maxWidth: '48%' },
+  templateText: { fontSize: 12, fontWeight: '700', color: Glass.tint.green },
   summaryBlock: { gap: 6 },
   summaryLine: {
     flexDirection: 'row',
@@ -1216,7 +1378,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 2,
   },
-  summaryLabel: { width: 78, fontSize: 13, color: '#666', fontWeight: '600' },
-  summaryValue: { flex: 1, fontSize: 13, color: '#111', fontWeight: '600' },
+  summaryLabel: { width: 78, fontSize: 13, color: SellerTheme.textSecondary, fontWeight: '600' },
+  summaryValue: { flex: 1, fontSize: 13, color: SellerTheme.text, fontWeight: '600' },
   disabled: { opacity: 0.5 },
 });

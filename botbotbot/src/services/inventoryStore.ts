@@ -233,6 +233,7 @@ export async function hydrateInventoryFromApi(row: {
   name: string;
   category?: string;
   price?: string;
+  list_price?: string | number;
   description?: string;
   category_notes?: string;
   quantity?: number;
@@ -340,7 +341,12 @@ export async function createInventoryItem(
   items.unshift(item);
   await writeAll(items);
   // upsert on API also updates visibility status for this SKU
-  await syncSellerProductToApi(item, { forceRetag: true });
+  const synced = await syncSellerProductToApi(item, { forceRetag: true });
+  if (!synced) {
+    throw new Error(
+      'Saved on device, but chat catalog sync failed. Check the backend and try Save again.',
+    );
+  }
   return item;
 }
 
@@ -375,7 +381,14 @@ export async function updateInventoryItem(
   items[index] = updated;
   await writeAll(items);
   // Await so Draft→Active is committed before the edit screen navigates back
-  await syncSellerProductToApi(updated, { clearDiscount: !!input.clearDiscount });
+  const synced = await syncSellerProductToApi(updated, {
+    clearDiscount: !!input.clearDiscount,
+  });
+  if (!synced) {
+    throw new Error(
+      'Saved on device, but chat catalog sync failed. Check the backend and try Save again.',
+    );
+  }
   return updated;
 }
 
@@ -467,7 +480,8 @@ export async function setItemQuantity(
   };
   await writeAll(items);
   const updated = items[index];
-  void syncSellerProductToApi(updated);
+  // Await so chat/search cannot race ahead of the catalog write
+  await syncSellerProductToApi(updated);
   return updated;
 }
 

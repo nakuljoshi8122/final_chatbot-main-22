@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HapticTab } from '@/shared/ui/HapticTab';
@@ -9,6 +9,7 @@ import TabBarBackground from '@/shared/ui/TabBarBackground';
 import { Colors } from '@/shared/theme/Colors';
 import { Brand } from '@/shared/theme/Brand';
 import { useColorScheme } from '@/shared/hooks/useColorScheme';
+import { Glass } from '@/shared/theme/LiquidGlass';
 
 const TAB_BAR_CONTENT_HEIGHT = 56;
 
@@ -31,17 +32,17 @@ export default function TabLayout() {
             height: tabBarHeight,
             paddingBottom: insets.bottom,
             paddingTop: 8,
-            backgroundColor: Brand.colors.accent,
-            borderTopColor: Brand.colors.border,
-            borderTopWidth: 1,
+            backgroundColor: 'transparent',
+            borderTopColor: 'transparent',
+            borderTopWidth: 0,
           },
           default: {
             height: tabBarHeight,
             paddingBottom: insets.bottom,
             paddingTop: 8,
-            backgroundColor: Brand.colors.accent,
-            borderTopColor: Brand.colors.border,
-            borderTopWidth: 1,
+            backgroundColor: 'rgba(255,255,255,0.88)',
+            borderTopColor: Glass.stroke.lightOuter,
+            borderTopWidth: StyleSheet.hairlineWidth,
           },
         }),
       }}>
